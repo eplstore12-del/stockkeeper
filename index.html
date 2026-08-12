@@ -19,7 +19,11 @@
 <script type="text/javascript" src="https://cdn.jsdelivr.net/npm/@emailjs/browser@3/dist/email.min.js"></script>
 <script type="text/javascript">
   (function(){
-    emailjs.init("l51hBXXZZPYhmMBSo");
+    try {
+      emailjs.init("l51hBXXZZPYhmMBSo");
+    } catch(e) {
+      console.warn("EmailJS initialization skipped or blocked:", e);
+    }
   })();
 </script>
 
@@ -861,11 +865,6 @@ document.getElementById("stockForm").addEventListener("submit", function (e) {
     }
   }
 
-  // 🔔 Trigger Low Stock Email Alert via EmailJS if stock <= threshold
-  if (item.qty <= LOW_STOCK_THRESHOLD) {
-    sendLowStockEmail(item.name, item.code, item.qty);
-  }
-
   const now = new Date();
   const [y, m, d] = dateVal.split("-").map(Number);
   const combinedDate = new Date(y, m - 1, d, now.getHours(), now.getMinutes(), now.getSeconds());
@@ -884,10 +883,23 @@ document.getElementById("stockForm").addEventListener("submit", function (e) {
     notes
   });
 
+  // 1. SAVE DATA FIRST (Guarantees local storage is updated immediately)
   saveData();
   renderAll();
   showToast(type === "IN" ? `Stocked IN ${qty} x ${name}` : `Stocked OUT ${qty} x ${name}`, "success");
 
+  // 2. TRIGGER EMAIL ALERT SAFELY (Wrapped in try/catch so email errors never interrupt saving)
+  if (item.qty <= LOW_STOCK_THRESHOLD) {
+    try {
+      if (typeof emailjs !== 'undefined') {
+        sendLowStockEmail(item.name, item.code, item.qty);
+      }
+    } catch (err) {
+      console.error("EmailJS execution error:", err);
+    }
+  }
+
+  // Reset form
   document.getElementById("stockForm").reset();
   document.getElementById("itemQty").value = 1;
   document.getElementById("itemUnitPrice").value = "0.00";
