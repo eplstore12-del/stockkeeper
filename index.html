@@ -15,6 +15,14 @@
 <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-app-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-auth-compat.js"></script>
 
+<!-- EmailJS SDK -->
+<script type="text/javascript" src="https://cdn.jsdelivr.net/npm/@emailjs/browser@3/dist/email.min.js"></script>
+<script type="text/javascript">
+  (function(){
+    emailjs.init("l51hBXXZZPYhmMBSo");
+  })();
+</script>
+
 <style>
   body {
     font-family: 'Plus Jakarta Sans', sans-serif;
@@ -456,6 +464,28 @@ const TXN_KEY = "sk_transactions_v4";
 const PIN_KEY = "sk_app_pin_v4";
 const LOW_STOCK_THRESHOLD = 5;
 
+/* ============ EMAILJS ALERT FUNCTION ============ */
+function sendLowStockEmail(itemName, itemCode, currentQty) {
+  const serviceID = "service_jdnsri6";
+  const templateID = "template_0dpp4zi";
+
+  const templateParams = {
+    item_name: itemName,
+    item_code: itemCode,
+    current_qty: currentQty
+  };
+
+  emailjs.send(serviceID, templateID, templateParams)
+    .then((response) => {
+      console.log("Low stock email sent successfully!", response.status, response.text);
+      showToast(`Low stock alert sent to Gmail for ${itemName}`, "info");
+    })
+    .catch((error) => {
+      console.error("Failed to send low stock alert email:", error);
+      showToast("Failed to send email alert", "error");
+    });
+}
+
 /* ============ STATE ============ */
 let inventory = [];
 let transactions = [];
@@ -829,6 +859,11 @@ document.getElementById("stockForm").addEventListener("submit", function (e) {
       item = { code, name, qty, floor, rack, box };
       inventory.push(item);
     }
+  }
+
+  // 🔔 Trigger Low Stock Email Alert via EmailJS if stock <= threshold
+  if (item.qty <= LOW_STOCK_THRESHOLD) {
+    sendLowStockEmail(item.name, item.code, item.qty);
   }
 
   const now = new Date();
