@@ -3,271 +3,393 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>StockKeeper Pro - Offline Inventory Manager</title>
+<title>StockKeeper Enterprise - Inventory Management System</title>
+<!-- Tailwind CSS -->
 <script src="https://cdn.tailwindcss.com"></script>
+<!-- Google Fonts -->
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
 
 <!-- Firebase SDKs -->
 <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-app-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-auth-compat.js"></script>
 
 <style>
-  ::-webkit-scrollbar { height: 8px; width: 8px; }
-  ::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 4px; }
-  .toast { animation: slideIn 0.3s ease, fadeOut 0.3s ease 2.7s forwards; }
-  @keyframes slideIn { from { transform: translateX(120%); opacity:0; } to { transform: translateX(0); opacity:1; } }
-  @keyframes fadeOut { to { opacity: 0; transform: translateX(120%); } }
-  datalist { display:none; }
+  body {
+    font-family: 'Plus Jakarta Sans', sans-serif;
+  }
+  .font-mono {
+    font-family: 'JetBrains Mono', monospace;
+  }
+  ::-webkit-scrollbar { height: 6px; width: 6px; }
+  ::-webkit-scrollbar-track { background: #f1f5f9; }
+  ::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 9999px; }
+  ::-webkit-scrollbar-thumb:hover { background: #94a3b8; }
+  
+  .toast { animation: slideIn 0.3s cubic-bezier(0.16, 1, 0.3, 1), fadeOut 0.3s ease 2.7s forwards; }
+  @keyframes slideIn { from { transform: translateY(-20px) scale(0.95); opacity:0; } to { transform: translateY(0) scale(1); opacity:1; } }
+  @keyframes fadeOut { to { opacity: 0; transform: translateY(-20px) scale(0.95); } }
   .autocomplete-list { max-height: 220px; overflow-y:auto; }
+  
+  .glass-card {
+    background: rgba(255, 255, 255, 0.95);
+    backdrop-filter: blur(8px);
+  }
 </style>
 </head>
-<body class="bg-slate-100 min-h-screen text-slate-800">
+<body class="bg-slate-50 min-h-screen text-slate-800 antialiased selection:bg-indigo-500 selection:text-white">
 
-<div id="toastContainer" class="fixed top-4 right-4 z-50 flex flex-col gap-2 w-80"></div>
+<div id="toastContainer" class="fixed top-5 right-5 z-50 flex flex-col gap-2.5 w-80"></div>
 
-<!-- HEADER -->
-<header class="bg-white border-b border-slate-200 sticky top-0 z-30 shadow-sm">
-  <div class="max-w-7xl mx-auto px-4 py-3 flex flex-wrap items-center justify-between gap-3">
-    <div class="flex items-center gap-2">
-      <div class="bg-indigo-600 text-white rounded-lg w-9 h-9 flex items-center justify-center font-bold text-lg">S</div>
+<div class="flex min-h-screen">
+
+  <!-- SIDEBAR NAVIGATION -->
+  <aside class="w-64 bg-slate-900 text-slate-300 flex flex-col shrink-0 border-r border-slate-800">
+    <!-- Brand -->
+    <div class="p-5 border-b border-slate-800 flex items-center gap-3">
+      <div class="bg-gradient-to-tr from-indigo-600 to-violet-500 text-white rounded-xl w-10 h-10 flex items-center justify-center font-extrabold text-xl shadow-lg shadow-indigo-500/30">
+        SK
+      </div>
       <div>
-        <h1 class="text-lg font-bold leading-tight">StockKeeper Pro</h1>
-        <p class="text-xs text-slate-500 leading-tight">Offline Inventory Manager</p>
+        <h1 class="text-base font-bold text-white tracking-wide leading-tight">StockKeeper</h1>
+        <p class="text-[11px] text-slate-400 font-medium tracking-wider uppercase">Enterprise v4.0</p>
       </div>
     </div>
-    
-    <div class="flex flex-wrap items-center gap-2">
-      <!-- Auth Slot -->
-      <div id="authButtonContainer"></div>
 
-      <button onclick="changeAppPin()" class="text-sm bg-slate-100 text-slate-700 border border-slate-300 hover:bg-slate-200 px-3 py-2 rounded-lg font-medium transition">🔑 Change PIN</button>
-      <button onclick="exportInventoryCSV()" class="text-sm bg-emerald-50 text-emerald-700 border border-emerald-200 hover:bg-emerald-100 px-3 py-2 rounded-lg font-medium transition">⬇ Export Inventory CSV</button>
-      <button onclick="exportTransactionsCSV()" class="text-sm bg-emerald-50 text-emerald-700 border border-emerald-200 hover:bg-emerald-100 px-3 py-2 rounded-lg font-medium transition">⬇ Export Logs CSV</button>
-      <button onclick="backupJSON()" class="text-sm bg-indigo-50 text-indigo-700 border border-indigo-200 hover:bg-indigo-100 px-3 py-2 rounded-lg font-medium transition">💾 Backup</button>
-      <label class="text-sm bg-amber-50 text-amber-700 border border-amber-200 hover:bg-amber-100 px-3 py-2 rounded-lg font-medium transition cursor-pointer">
-        ⤴ Restore
+    <!-- Actions / Utilities -->
+    <div class="p-4 space-y-1.5 flex-1 overflow-y-auto">
+      <div class="text-[10px] font-bold text-slate-500 uppercase tracking-wider px-3 mb-2">Management Controls</div>
+      
+      <button onclick="changeAppPin()" class="w-full text-left flex items-center gap-2.5 px-3 py-2 rounded-lg text-xs font-semibold text-slate-300 hover:bg-slate-800 hover:text-white transition">
+        <span class="text-base">🔑</span> Security PIN
+      </button>
+      
+      <button onclick="exportInventoryCSV()" class="w-full text-left flex items-center gap-2.5 px-3 py-2 rounded-lg text-xs font-semibold text-emerald-400 hover:bg-emerald-500/10 transition">
+        <span class="text-base">📊</span> Export Inventory CSV
+      </button>
+
+      <button onclick="exportTransactionsCSV()" class="w-full text-left flex items-center gap-2.5 px-3 py-2 rounded-lg text-xs font-semibold text-emerald-400 hover:bg-emerald-500/10 transition">
+        <span class="text-base">🧾</span> Export Logs CSV
+      </button>
+
+      <div class="text-[10px] font-bold text-slate-500 uppercase tracking-wider px-3 pt-4 mb-2">Data & Maintenance</div>
+
+      <button onclick="backupJSON()" class="w-full text-left flex items-center gap-2.5 px-3 py-2 rounded-lg text-xs font-semibold text-slate-300 hover:bg-slate-800 hover:text-white transition">
+        <span class="text-base">💾</span> Backup Database
+      </button>
+
+      <label class="w-full text-left flex items-center gap-2.5 px-3 py-2 rounded-lg text-xs font-semibold text-amber-400 hover:bg-amber-500/10 transition cursor-pointer">
+        <span class="text-base">⤴</span> Restore Database
         <input type="file" id="restoreInput" accept=".json" class="hidden" onchange="restoreJSON(event)">
       </label>
-      <button onclick="resetAppData()" class="text-sm bg-red-50 text-red-700 border border-red-200 hover:bg-red-100 px-3 py-2 rounded-lg font-medium transition">🗑 Reset</button>
-    </div>
-  </div>
-</header>
 
-<main id="mainAppContent" class="max-w-7xl mx-auto px-4 py-6 space-y-6 hidden">
+      <button onclick="resetAppData()" class="w-full text-left flex items-center gap-2.5 px-3 py-2 rounded-lg text-xs font-semibold text-rose-400 hover:bg-rose-500/10 transition">
+        <span class="text-base">🗑</span> Purge System Data
+      </button>
+    </div>
 
-  <!-- METRICS -->
-  <div class="grid grid-cols-1 sm:grid-cols-4 gap-4">
-    <div class="bg-white rounded-xl shadow-sm border border-slate-200 p-4 flex items-center justify-between">
-      <div>
-        <p class="text-xs text-slate-500 font-medium">Total Items</p>
-        <p id="metricTotalItems" class="text-2xl font-bold text-slate-800">0</p>
-      </div>
-      <div class="w-10 h-10 rounded-lg bg-indigo-50 flex items-center justify-center text-xl">📦</div>
+    <!-- Auth Footnote -->
+    <div class="p-4 border-t border-slate-800 bg-slate-950/50">
+      <div id="authButtonContainer"></div>
     </div>
-    <div class="bg-white rounded-xl shadow-sm border border-slate-200 p-4 flex items-center justify-between">
-      <div>
-        <p class="text-xs text-slate-500 font-medium">Low Stock Warnings</p>
-        <p id="metricLowStock" class="text-2xl font-bold text-red-600">0</p>
-      </div>
-      <div class="w-10 h-10 rounded-lg bg-red-50 flex items-center justify-center text-xl">⚠️</div>
-    </div>
-    <div class="bg-white rounded-xl shadow-sm border border-slate-200 p-4 flex items-center justify-between">
-      <div>
-        <p class="text-xs text-slate-500 font-medium">Total Units in Stock</p>
-        <p id="metricTotalUnits" class="text-2xl font-bold text-emerald-600">0</p>
-      </div>
-      <div class="w-10 h-10 rounded-lg bg-emerald-50 flex items-center justify-center text-xl">📊</div>
-    </div>
-    <div class="bg-white rounded-xl shadow-sm border border-slate-200 p-4 flex items-center justify-between">
-      <div>
-        <p class="text-xs text-slate-500 font-medium">Total Inventory Value</p>
-        <p id="metricTotalValue" class="text-2xl font-bold text-indigo-600">₹0.00</p>
-      </div>
-      <div class="w-10 h-10 rounded-lg bg-indigo-50 flex items-center justify-center text-xl">💰</div>
-    </div>
-  </div>
+  </aside>
 
-  <!-- REPORT FILTER & SUMMARY SECTION -->
-  <div class="bg-white rounded-xl shadow-sm border border-slate-200 p-5">
-    <div class="flex flex-wrap items-center justify-between gap-3 mb-4 border-b border-slate-100 pb-3">
-      <div>
-        <h2 class="font-bold text-slate-800 flex items-center gap-2">📈 Period Analytics & Financial Report</h2>
-        <p class="text-xs text-slate-500">Summary of stock inflows and outflows based on selected duration</p>
-      </div>
-      <div class="flex flex-wrap items-center gap-2">
-        <label class="text-xs font-semibold text-slate-500">Period:</label>
-        <select id="reportRangeSelect" onchange="toggleCustomDateInputs(); renderReports();" class="border border-slate-300 rounded-lg text-sm px-3 py-1.5 focus:ring-2 focus:ring-indigo-500 outline-none">
-          <option value="month">This Month</option>
-          <option value="6months">Last 6 Months</option>
-          <option value="12months" selected>Last 12 Months</option>
-          <option value="all">All Time</option>
-          <option value="custom">Custom Range</option>
-        </select>
-
-        <!-- Custom Date Range Inputs -->
-        <div id="customDateRangeContainer" class="hidden flex items-center gap-2">
-          <input id="reportStartDate" type="date" onchange="renderReports()" class="border border-slate-300 rounded-lg text-xs px-2 py-1.5 focus:ring-2 focus:ring-indigo-500 outline-none">
-          <span class="text-xs text-slate-400">to</span>
-          <input id="reportEndDate" type="date" onchange="renderReports()" class="border border-slate-300 rounded-lg text-xs px-2 py-1.5 focus:ring-2 focus:ring-indigo-500 outline-none">
-        </div>
-
-        <button onclick="downloadPeriodReportCSV()" class="text-xs bg-indigo-600 hover:bg-indigo-700 text-white font-semibold px-3 py-2 rounded-lg transition shadow-sm ml-2">
-          📥 Download Period Report CSV
-        </button>
-      </div>
-    </div>
+  <!-- MAIN WORKSPACE -->
+  <div class="flex-1 flex flex-col min-w-0 overflow-hidden">
     
-    <div class="grid grid-cols-1 sm:grid-cols-3 gap-4">
-      <div class="bg-slate-50 p-4 rounded-lg border border-slate-200">
-        <p class="text-xs font-medium text-slate-500">Total Purchase Spent (Stock IN)</p>
-        <p id="reportSpent" class="text-xl font-bold text-emerald-700 mt-1">₹0.00</p>
-        <p id="reportUnitsIn" class="text-xs text-slate-400 mt-1">0 units added</p>
+    <!-- TOP HEADER -->
+    <header class="bg-white border-b border-slate-200/80 px-8 py-4 flex items-center justify-between sticky top-0 z-20 shadow-xs">
+      <div>
+        <h2 class="text-xl font-bold text-slate-900 tracking-tight">Inventory & Operations Dashboard</h2>
+        <p class="text-xs text-slate-500 font-medium">Real-time stock valuation, movements, and warehouse tracking</p>
       </div>
-      <div class="bg-slate-50 p-4 rounded-lg border border-slate-200">
-        <p class="text-xs font-medium text-slate-500">Total Stock Value Removed (Stock OUT)</p>
-        <p id="reportOutValue" class="text-xl font-bold text-red-600 mt-1">₹0.00</p>
-        <p id="reportUnitsOut" class="text-xs text-slate-400 mt-1">0 units removed</p>
+      <div class="flex items-center gap-3">
+        <span class="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-semibold bg-emerald-50 text-emerald-700 border border-emerald-200/60">
+          <span class="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse"></span> Offline Ready
+        </span>
       </div>
-      <div class="bg-slate-50 p-4 rounded-lg border border-slate-200">
-        <p class="text-xs font-medium text-slate-500">Net Movement Value</p>
-        <p id="reportNetValue" class="text-xl font-bold text-indigo-600 mt-1">₹0.00</p>
-        <p id="reportTxnCount" class="text-xs text-slate-400 mt-1">0 transactions logged</p>
+    </header>
+
+    <!-- CONTENT BODY -->
+    <main id="mainAppContent" class="p-8 space-y-8 overflow-y-auto hidden">
+
+      <!-- KEY METRICS CARDS -->
+      <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-5">
+        <div class="bg-white rounded-xl p-5 border border-slate-200/80 shadow-xs hover:shadow-md transition">
+          <div class="flex items-center justify-between">
+            <span class="text-xs font-semibold uppercase tracking-wider text-slate-500">Total Products</span>
+            <div class="w-9 h-9 rounded-lg bg-indigo-50 text-indigo-600 flex items-center justify-center font-bold">📦</div>
+          </div>
+          <p id="metricTotalItems" class="text-3xl font-bold text-slate-900 mt-3 tracking-tight">0</p>
+          <span class="text-[11px] text-slate-400 font-medium mt-1 block">Active SKUs cataloged</span>
+        </div>
+
+        <div class="bg-white rounded-xl p-5 border border-slate-200/80 shadow-xs hover:shadow-md transition">
+          <div class="flex items-center justify-between">
+            <span class="text-xs font-semibold uppercase tracking-wider text-slate-500">Stock Alerts</span>
+            <div class="w-9 h-9 rounded-lg bg-rose-50 text-rose-600 flex items-center justify-center font-bold">⚠️</div>
+          </div>
+          <p id="metricLowStock" class="text-3xl font-bold text-rose-600 mt-3 tracking-tight">0</p>
+          <span class="text-[11px] text-rose-500 font-medium mt-1 block">Items below threshold (&lt;5)</span>
+        </div>
+
+        <div class="bg-white rounded-xl p-5 border border-slate-200/80 shadow-xs hover:shadow-md transition">
+          <div class="flex items-center justify-between">
+            <span class="text-xs font-semibold uppercase tracking-wider text-slate-500">Total Quantity</span>
+            <div class="w-9 h-9 rounded-lg bg-emerald-50 text-emerald-600 flex items-center justify-center font-bold">📊</div>
+          </div>
+          <p id="metricTotalUnits" class="text-3xl font-bold text-emerald-600 mt-3 tracking-tight">0</p>
+          <span class="text-[11px] text-slate-400 font-medium mt-1 block">Units across all floors</span>
+        </div>
+
+        <div class="bg-white rounded-xl p-5 border border-slate-200/80 shadow-xs hover:shadow-md transition">
+          <div class="flex items-center justify-between">
+            <span class="text-xs font-semibold uppercase tracking-wider text-slate-500">Portfolio Valuation</span>
+            <div class="w-9 h-9 rounded-lg bg-violet-50 text-violet-600 flex items-center justify-center font-bold">💰</div>
+          </div>
+          <p id="metricTotalValue" class="text-3xl font-bold text-slate-900 mt-3 tracking-tight">₹0.00</p>
+          <span class="text-[11px] text-slate-400 font-medium mt-1 block">Estimated total asset value</span>
+        </div>
       </div>
-    </div>
+
+      <!-- PERIOD ANALYTICS BANNER -->
+      <div class="bg-white rounded-2xl border border-slate-200/80 p-6 shadow-xs">
+        <div class="flex flex-wrap items-center justify-between gap-4 pb-5 mb-5 border-b border-slate-100">
+          <div>
+            <h3 class="text-base font-bold text-slate-900 flex items-center gap-2">
+              <span>📈</span> Financial Summary & Movements
+            </h3>
+            <p class="text-xs text-slate-500">Analyze overall cashflow spent on acquisitions vs stock removals</p>
+          </div>
+          
+          <div class="flex flex-wrap items-center gap-2.5">
+            <select id="reportRangeSelect" onchange="toggleCustomDateInputs(); renderReports();" class="border border-slate-200 rounded-xl text-xs font-semibold text-slate-700 bg-slate-50/50 px-3 py-2 focus:ring-2 focus:ring-indigo-500 outline-none">
+              <option value="month">This Month</option>
+              <option value="6months">Last 6 Months</option>
+              <option value="12months" selected>Last 12 Months</option>
+              <option value="all">All Time</option>
+              <option value="custom">Custom Range</option>
+            </select>
+
+            <div id="customDateRangeContainer" class="hidden flex items-center gap-2">
+              <input id="reportStartDate" type="date" onchange="renderReports()" class="border border-slate-200 rounded-xl text-xs px-2.5 py-1.5 focus:ring-2 focus:ring-indigo-500 outline-none">
+              <span class="text-xs font-medium text-slate-400">to</span>
+              <input id="reportEndDate" type="date" onchange="renderReports()" class="border border-slate-200 rounded-xl text-xs px-2.5 py-1.5 focus:ring-2 focus:ring-indigo-500 outline-none">
+            </div>
+
+            <button onclick="downloadPeriodReportCSV()" class="text-xs bg-indigo-600 hover:bg-indigo-700 text-white font-semibold px-4 py-2 rounded-xl transition shadow-xs flex items-center gap-1.5">
+              <span>📥</span> Export Period Report
+            </button>
+          </div>
+        </div>
+
+        <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+          <div class="bg-slate-50/80 p-4 rounded-xl border border-slate-100">
+            <span class="text-[11px] font-bold uppercase tracking-wider text-slate-400">Total Purchases (Stock IN)</span>
+            <p id="reportSpent" class="text-2xl font-bold text-emerald-600 mt-1">₹0.00</p>
+            <p id="reportUnitsIn" class="text-xs text-slate-500 mt-0.5 font-medium">0 units added</p>
+          </div>
+
+          <div class="bg-slate-50/80 p-4 rounded-xl border border-slate-100">
+            <span class="text-[11px] font-bold uppercase tracking-wider text-slate-400">Outflow Value (Stock OUT)</span>
+            <p id="reportOutValue" class="text-2xl font-bold text-rose-600 mt-1">₹0.00</p>
+            <p id="reportUnitsOut" class="text-xs text-slate-500 mt-0.5 font-medium">0 units removed</p>
+          </div>
+
+          <div class="bg-slate-50/80 p-4 rounded-xl border border-slate-100">
+            <span class="text-[11px] font-bold uppercase tracking-wider text-slate-400">Net Movement Balance</span>
+            <p id="reportNetValue" class="text-2xl font-bold text-indigo-600 mt-1">₹0.00</p>
+            <p id="reportTxnCount" class="text-xs text-slate-500 mt-0.5 font-medium">0 transactions logged</p>
+          </div>
+        </div>
+      </div>
+
+      <!-- WORKSPACE GRID -->
+      <div class="grid grid-cols-1 lg:grid-cols-12 gap-8">
+
+        <!-- ENTRY FORM PANEL -->
+        <div class="lg:col-span-4">
+          <div class="bg-white rounded-2xl border border-slate-200/80 p-6 shadow-xs sticky top-24">
+            <div class="flex items-center justify-between pb-4 mb-4 border-b border-slate-100">
+              <h3 class="font-bold text-slate-900 text-base flex items-center gap-2">
+                <span>⚡</span> Record Stock Movement
+              </h3>
+            </div>
+
+            <form id="stockForm" class="space-y-4" autocomplete="off">
+              
+              <div class="relative">
+                <label class="text-xs font-semibold text-slate-600 mb-1 block">Item Code / Barcode *</label>
+                <input id="itemCode" type="text" required placeholder="e.g. SKU-1004"
+                  class="w-full px-3.5 py-2 border border-slate-200 rounded-xl focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 outline-none text-sm font-mono transition bg-slate-50/30">
+                <div id="codeSuggestions" class="autocomplete-list hidden absolute z-40 bg-white border border-slate-200 rounded-xl shadow-xl w-full mt-1.5 overflow-hidden"></div>
+              </div>
+
+              <div>
+                <label class="text-xs font-semibold text-slate-600 mb-1 block">Item Name *</label>
+                <input id="itemName" type="text" required placeholder="e.g. Wireless Ergonomic Mouse"
+                  class="w-full px-3.5 py-2 border border-slate-200 rounded-xl focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 outline-none text-sm transition bg-slate-50/30">
+              </div>
+
+              <div>
+                <label class="text-xs font-semibold text-slate-600 mb-1 block">Operation Type</label>
+                <div class="grid grid-cols-2 gap-2">
+                  <label class="cursor-pointer">
+                    <input type="radio" name="txnType" value="IN" class="peer hidden" checked onchange="updatePartyLabel()">
+                    <div class="text-center py-2.5 rounded-xl border border-slate-200 peer-checked:border-emerald-500 peer-checked:bg-emerald-50/60 peer-checked:text-emerald-700 font-bold text-xs transition">
+                      + Stock IN
+                    </div>
+                  </label>
+                  <label class="cursor-pointer">
+                    <input type="radio" name="txnType" value="OUT" class="peer hidden" onchange="updatePartyLabel()">
+                    <div class="text-center py-2.5 rounded-xl border border-slate-200 peer-checked:border-rose-500 peer-checked:bg-rose-50/60 peer-checked:text-rose-700 font-bold text-xs transition">
+                      - Stock OUT
+                    </div>
+                  </label>
+                </div>
+              </div>
+
+              <div>
+                <label id="partyLabel" class="text-xs font-semibold text-slate-600 mb-1 block">Supplier Name (Bought From)</label>
+                <input id="itemParty" type="text" placeholder="e.g. Apex Hardware Supplies"
+                  class="w-full px-3.5 py-2 border border-slate-200 rounded-xl focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 outline-none text-sm transition bg-slate-50/30">
+              </div>
+
+              <!-- LOCATION CONTAINER -->
+              <div class="p-3.5 bg-slate-50 rounded-xl border border-slate-200/60 space-y-2.5">
+                <span class="text-xs font-bold text-slate-700 flex items-center gap-1.5">
+                  <span>📍</span> Warehouse Storage Mapping
+                </span>
+                
+                <div>
+                  <label class="text-[11px] font-semibold text-slate-500 mb-0.5 block">Floor Level</label>
+                  <select id="itemFloor" class="w-full px-3 py-1.5 border border-slate-200 rounded-lg text-xs font-medium focus:ring-2 focus:ring-indigo-500 outline-none bg-white">
+                    <option value="Ground Floor">Ground Floor</option>
+                    <option value="1st Floor">1st Floor</option>
+                    <option value="2nd Floor">2nd Floor</option>
+                    <option value="3rd Floor">3rd Floor</option>
+                  </select>
+                </div>
+
+                <div class="grid grid-cols-2 gap-2">
+                  <div>
+                    <label class="text-[11px] font-semibold text-slate-500 mb-0.5 block">Rack No.</label>
+                    <input id="itemRack" type="text" placeholder="Rack A-04"
+                      class="w-full px-3 py-1.5 border border-slate-200 rounded-lg text-xs focus:ring-2 focus:ring-indigo-500 outline-none bg-white">
+                  </div>
+                  <div>
+                    <label class="text-[11px] font-semibold text-slate-500 mb-0.5 block">Box No.</label>
+                    <input id="itemBox" type="text" placeholder="Box 12"
+                      class="w-full px-3 py-1.5 border border-slate-200 rounded-lg text-xs focus:ring-2 focus:ring-indigo-500 outline-none bg-white">
+                  </div>
+                </div>
+              </div>
+
+              <div class="grid grid-cols-2 gap-2.5">
+                <div>
+                  <label class="text-xs font-semibold text-slate-600 mb-1 block">Quantity *</label>
+                  <input id="itemQty" type="number" min="1" value="1" required oninput="calculateTotal()"
+                    class="w-full px-3.5 py-2 border border-slate-200 rounded-xl focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 outline-none text-sm font-semibold transition bg-slate-50/30">
+                </div>
+                <div>
+                  <label class="text-xs font-semibold text-slate-600 mb-1 block">Unit Price (₹) *</label>
+                  <input id="itemUnitPrice" type="number" step="0.01" min="0" value="0.00" required oninput="calculateTotal()"
+                    class="w-full px-3.5 py-2 border border-slate-200 rounded-xl focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 outline-none text-sm font-semibold transition bg-slate-50/30">
+                </div>
+              </div>
+
+              <div>
+                <label class="text-xs font-semibold text-slate-600 mb-1 block">Calculated Total (₹)</label>
+                <input id="itemTotalPrice" type="text" readonly value="0.00"
+                  class="w-full px-3.5 py-2 bg-slate-100 border border-slate-200 rounded-xl font-bold text-slate-800 outline-none text-sm">
+              </div>
+
+              <div>
+                <label class="text-xs font-semibold text-slate-600 mb-1 block">Date *</label>
+                <input id="itemDate" type="date" required
+                  class="w-full px-3.5 py-2 border border-slate-200 rounded-xl focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 outline-none text-sm transition bg-slate-50/30">
+              </div>
+
+              <div>
+                <label class="text-xs font-semibold text-slate-600 mb-1 block">Remarks / Reference</label>
+                <input id="itemNotes" type="text" placeholder="Invoice reference, order ID..."
+                  class="w-full px-3.5 py-2 border border-slate-200 rounded-xl focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 outline-none text-sm transition bg-slate-50/30">
+              </div>
+
+              <button type="submit" class="w-full bg-slate-900 hover:bg-slate-800 text-white font-bold py-3 rounded-xl transition text-xs tracking-wider uppercase shadow-md shadow-slate-900/10">
+                🔒 Authorize & Commit
+              </button>
+            </form>
+          </div>
+        </div>
+
+        <!-- TABLES CONTAINER -->
+        <div class="lg:col-span-8 space-y-8">
+
+          <!-- INVENTORY TABLE -->
+          <div class="bg-white rounded-2xl border border-slate-200/80 p-6 shadow-xs">
+            <div class="flex flex-wrap items-center justify-between gap-3 mb-5">
+              <div>
+                <h3 class="font-bold text-slate-900 text-base">📋 Active Inventory Directory</h3>
+                <p class="text-xs text-slate-500">Live item quantities, location badges, and stock values</p>
+              </div>
+              <input id="searchInventory" type="text" placeholder="Filter SKU, item, rack..."
+                class="px-3.5 py-2 border border-slate-200 rounded-xl text-xs font-medium focus:ring-2 focus:ring-indigo-500 outline-none w-60 bg-slate-50/50">
+            </div>
+
+            <div class="overflow-x-auto rounded-xl border border-slate-100">
+              <table class="w-full text-left text-xs">
+                <thead class="bg-slate-50 border-b border-slate-200 text-slate-500 uppercase tracking-wider font-semibold">
+                  <tr>
+                    <th class="py-3 px-3">SKU</th>
+                    <th class="py-3 px-3">Item Details</th>
+                    <th class="py-3 px-3">Location</th>
+                    <th class="py-3 px-3">Qty</th>
+                    <th class="py-3 px-3">Avg Price</th>
+                    <th class="py-3 px-3">Total Value</th>
+                    <th class="py-3 px-3">Status</th>
+                    <th class="py-3 px-3 text-right">Action</th>
+                  </tr>
+                </thead>
+                <tbody id="inventoryTableBody" class="divide-y divide-slate-100 font-medium text-slate-700"></tbody>
+              </table>
+              <p id="inventoryEmptyMsg" class="text-center text-slate-400 text-xs py-8 hidden">No items found matching your criteria.</p>
+            </div>
+          </div>
+
+          <!-- TRANSACTIONS LOG -->
+          <div class="bg-white rounded-2xl border border-slate-200/80 p-6 shadow-xs">
+            <div class="mb-4">
+              <h3 class="font-bold text-slate-900 text-base">🧾 Audit Log & History</h3>
+              <p class="text-xs text-slate-500">Complete historical register of inflows and outflows</p>
+            </div>
+
+            <div class="overflow-x-auto max-h-96 rounded-xl border border-slate-100">
+              <table class="w-full text-left text-xs">
+                <thead class="bg-slate-50 border-b border-slate-200 text-slate-500 uppercase tracking-wider font-semibold sticky top-0 z-10">
+                  <tr>
+                    <th class="py-3 px-3">Date</th>
+                    <th class="py-3 px-3">Item Name</th>
+                    <th class="py-3 px-3">Type</th>
+                    <th class="py-3 px-3">Party</th>
+                    <th class="py-3 px-3">Location</th>
+                    <th class="py-3 px-3">Qty</th>
+                    <th class="py-3 px-3">Unit Price</th>
+                    <th class="py-3 px-3">Total</th>
+                  </tr>
+                </thead>
+                <tbody id="txnTableBody" class="divide-y divide-slate-100 font-medium text-slate-700"></tbody>
+              </table>
+              <p id="txnEmptyMsg" class="text-center text-slate-400 text-xs py-8 hidden">No transaction logs recorded yet.</p>
+            </div>
+          </div>
+
+        </div>
+      </div>
+    </main>
   </div>
-
-  <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
-
-    <!-- ENTRY FORM -->
-    <div class="lg:col-span-1">
-      <div class="bg-white rounded-xl shadow-sm border border-slate-200 p-5 sticky top-20">
-        <h2 class="font-bold text-slate-800 mb-4 flex items-center gap-2">✏️ Stock Entry</h2>
-        <form id="stockForm" class="space-y-3" autocomplete="off">
-          <div class="relative">
-            <label class="text-xs font-semibold text-slate-500">Item Code / Barcode</label>
-            <input id="itemCode" type="text" required placeholder="e.g. SKU-001"
-              class="w-full mt-1 px-3 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 outline-none text-sm">
-            <div id="codeSuggestions" class="autocomplete-list hidden absolute z-40 bg-white border border-slate-200 rounded-lg shadow-lg w-full mt-1"></div>
-          </div>
-
-          <div>
-            <label class="text-xs font-semibold text-slate-500">Item Name</label>
-            <input id="itemName" type="text" required placeholder="e.g. Blue Cotton Shirt"
-              class="w-full mt-1 px-3 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 outline-none text-sm">
-          </div>
-
-          <div>
-            <label class="text-xs font-semibold text-slate-500">Transaction Type</label>
-            <div class="grid grid-cols-2 gap-2 mt-1">
-              <label class="cursor-pointer">
-                <input type="radio" name="txnType" value="IN" class="peer hidden" checked onchange="updatePartyLabel()">
-                <div class="text-center py-2 rounded-lg border-2 border-slate-200 peer-checked:border-emerald-500 peer-checked:bg-emerald-50 peer-checked:text-emerald-700 font-semibold text-sm transition">Stock IN (+)</div>
-              </label>
-              <label class="cursor-pointer">
-                <input type="radio" name="txnType" value="OUT" class="peer hidden" onchange="updatePartyLabel()">
-                <div class="text-center py-2 rounded-lg border-2 border-slate-200 peer-checked:border-red-500 peer-checked:bg-red-50 peer-checked:text-red-700 font-semibold text-sm transition">Stock OUT (-)</div>
-              </label>
-            </div>
-          </div>
-
-          <div>
-            <label id="partyLabel" class="text-xs font-semibold text-slate-500">Supplier Name (Bought From)</label>
-            <input id="itemParty" type="text" placeholder="e.g. ABC Suppliers Ltd."
-              class="w-full mt-1 px-3 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 outline-none text-sm">
-          </div>
-
-          <div class="grid grid-cols-2 gap-2">
-            <div>
-              <label class="text-xs font-semibold text-slate-500">Quantity</label>
-              <input id="itemQty" type="number" min="1" value="1" required oninput="calculateTotal()"
-                class="w-full mt-1 px-3 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 outline-none text-sm">
-            </div>
-            <div>
-              <label class="text-xs font-semibold text-slate-500">Unit Price (₹)</label>
-              <input id="itemUnitPrice" type="number" step="0.01" min="0" value="0.00" required oninput="calculateTotal()"
-                class="w-full mt-1 px-3 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 outline-none text-sm">
-            </div>
-          </div>
-
-          <div>
-            <label class="text-xs font-semibold text-slate-500">Total Price (₹) (Auto)</label>
-            <input id="itemTotalPrice" type="text" readonly value="0.00"
-              class="w-full mt-1 px-3 py-2 bg-slate-100 border border-slate-300 rounded-lg font-bold text-slate-700 outline-none text-sm">
-          </div>
-
-          <div>
-            <label class="text-xs font-semibold text-slate-500">Date</label>
-            <input id="itemDate" type="date" required
-              class="w-full mt-1 px-3 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 outline-none text-sm">
-          </div>
-
-          <div>
-            <label class="text-xs font-semibold text-slate-500">Remarks / Notes</label>
-            <input id="itemNotes" type="text" placeholder="Optional"
-              class="w-full mt-1 px-3 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 outline-none text-sm">
-          </div>
-
-          <button type="submit" class="w-full bg-indigo-600 hover:bg-indigo-700 text-white font-semibold py-2.5 rounded-lg transition text-sm">
-            🔒 Submit Transaction
-          </button>
-        </form>
-      </div>
-    </div>
-
-    <!-- TABLES -->
-    <div class="lg:col-span-2 space-y-6">
-
-      <!-- INVENTORY -->
-      <div class="bg-white rounded-xl shadow-sm border border-slate-200 p-5">
-        <div class="flex flex-wrap items-center justify-between gap-2 mb-3">
-          <h2 class="font-bold text-slate-800 flex items-center gap-2">📋 Live Inventory</h2>
-          <input id="searchInventory" type="text" placeholder="Search by name or code..."
-            class="px-3 py-1.5 border border-slate-300 rounded-lg text-sm focus:ring-2 focus:ring-indigo-500 outline-none w-56">
-        </div>
-        <div class="overflow-x-auto">
-          <table class="w-full text-sm">
-            <thead>
-              <tr class="text-left text-xs text-slate-500 border-b border-slate-200">
-                <th class="py-2 pr-2">Code</th>
-                <th class="py-2 pr-2">Item Name</th>
-                <th class="py-2 pr-2">Qty</th>
-                <th class="py-2 pr-2">Avg Price/Unit</th>
-                <th class="py-2 pr-2">Total Value</th>
-                <th class="py-2 pr-2">Status</th>
-                <th class="py-2 pr-2">Action</th>
-              </tr>
-            </thead>
-            <tbody id="inventoryTableBody"></tbody>
-          </table>
-          <p id="inventoryEmptyMsg" class="text-center text-slate-400 text-sm py-6 hidden">No items found.</p>
-        </div>
-      </div>
-
-      <!-- TRANSACTIONS -->
-      <div class="bg-white rounded-xl shadow-sm border border-slate-200 p-5">
-        <h2 class="font-bold text-slate-800 mb-3 flex items-center gap-2">🧾 Transaction Log</h2>
-        <div class="overflow-x-auto max-h-96 overflow-y-auto">
-          <table class="w-full text-sm">
-            <thead class="sticky top-0 bg-white">
-              <tr class="text-left text-xs text-slate-500 border-b border-slate-200">
-                <th class="py-2 pr-2">Date</th>
-                <th class="py-2 pr-2">Item</th>
-                <th class="py-2 pr-2">Type</th>
-                <th class="py-2 pr-2">Supplier / Customer</th>
-                <th class="py-2 pr-2">Qty</th>
-                <th class="py-2 pr-2">Unit Price</th>
-                <th class="py-2 pr-2">Total Amount</th>
-                <th class="py-2 pr-2">Notes</th>
-              </tr>
-            </thead>
-            <tbody id="txnTableBody"></tbody>
-          </table>
-          <p id="txnEmptyMsg" class="text-center text-slate-400 text-sm py-6 hidden">No transactions yet.</p>
-        </div>
-      </div>
-
-    </div>
-  </div>
-</main>
+</div>
 
 <script>
 /* ============ FIREBASE AUTHENTICATION ============ */
@@ -287,13 +409,13 @@ const provider = new firebase.auth.GoogleAuthProvider();
 
 function handleGoogleSignIn() {
   auth.signInWithPopup(provider)
-    .then((result) => showToast(`Welcome, ${result.user.displayName}!`, "success"))
+    .then((result) => showToast(`Welcome back, ${result.user.displayName}!`, "success"))
     .catch((error) => showToast(error.message, "error"));
 }
 
 function handleSignOut() {
   auth.signOut()
-    .then(() => showToast("Signed out successfully.", "info"))
+    .then(() => showToast("Session signed out.", "info"))
     .catch((error) => showToast(error.message, "error"));
 }
 
@@ -304,21 +426,23 @@ auth.onAuthStateChanged((user) => {
   if (user) {
     mainContent.classList.remove("hidden");
     authBtnContainer.innerHTML = `
-      <div class="flex items-center gap-2">
-        <img src="${user.photoURL || ''}" class="w-7 h-7 rounded-full border border-slate-300" alt="Avatar">
-        <span class="text-xs font-semibold text-slate-700 hidden sm:inline">${escapeHtml(user.displayName || user.email)}</span>
-        <button onclick="handleSignOut()" class="text-xs bg-slate-100 hover:bg-slate-200 text-slate-700 border border-slate-300 px-2.5 py-1.5 rounded-lg font-medium transition">Sign Out</button>
+      <div class="flex items-center gap-3">
+        <img src="${user.photoURL || ''}" class="w-8 h-8 rounded-full border border-slate-700" alt="Avatar">
+        <div class="min-w-0 flex-1">
+          <p class="text-xs font-semibold text-white truncate">${escapeHtml(user.displayName || user.email)}</p>
+          <button onclick="handleSignOut()" class="text-[10px] text-slate-400 hover:text-slate-200 transition">Sign out</button>
+        </div>
       </div>
     `;
   } else {
     mainContent.classList.add("hidden");
     authBtnContainer.innerHTML = `
-      <button onclick="handleGoogleSignIn()" class="flex items-center gap-2 text-sm bg-white text-slate-700 border border-slate-300 hover:bg-slate-50 px-3 py-2 rounded-lg font-medium shadow-sm transition">
-        <svg class="w-4 h-4" viewBox="0 0 24 24">
-          <path fill="#4285F4" d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z"/>
-          <path fill="#34A853" d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z"/>
-          <path fill="#FBBC05" d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.06H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.94l2.85-2.22.81-.63z"/>
-          <path fill="#EA4335" d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.06l3.66 2.84c.87-2.6 3.3-4.52 6.16-4.52z"/>
+      <button onclick="handleGoogleSignIn()" class="w-full flex items-center justify-center gap-2 text-xs bg-indigo-600 hover:bg-indigo-500 text-white font-semibold px-3 py-2.5 rounded-xl transition shadow-lg shadow-indigo-600/20">
+        <svg class="w-3.5 h-3.5 fill-current" viewBox="0 0 24 24">
+          <path d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z"/>
+          <path d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z"/>
+          <path d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.06H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.94l2.85-2.22.81-.63z"/>
+          <path d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.06l3.66 2.84c.87-2.6 3.3-4.52 6.16-4.52z"/>
         </svg>
         Sign in with Google
       </button>
@@ -327,15 +451,15 @@ auth.onAuthStateChanged((user) => {
 });
 
 /* ============ STORAGE KEYS ============ */
-const INV_KEY = "sk_inventory_v3";
-const TXN_KEY = "sk_transactions_v3";
-const PIN_KEY = "sk_app_pin_v3";
+const INV_KEY = "sk_inventory_v4";
+const TXN_KEY = "sk_transactions_v4";
+const PIN_KEY = "sk_app_pin_v4";
 const LOW_STOCK_THRESHOLD = 5;
 
 /* ============ STATE ============ */
 let inventory = [];
 let transactions = [];
-let appPin = "1234"; // Default PIN
+let appPin = "1234";
 
 /* ============ FORM UI HELPERS ============ */
 function updatePartyLabel() {
@@ -345,10 +469,10 @@ function updatePartyLabel() {
 
   if (type === "IN") {
     partyLabel.textContent = "Supplier Name (Bought From)";
-    partyInput.placeholder = "e.g. ABC Suppliers Ltd.";
+    partyInput.placeholder = "e.g. Apex Hardware Supplies";
   } else {
     partyLabel.textContent = "Customer Name (Sold To)";
-    partyInput.placeholder = "e.g. Rahul Sharma";
+    partyInput.placeholder = "e.g. Acme Corp";
   }
 }
 
@@ -402,14 +526,14 @@ function saveData() {
 /* ============ TOASTS ============ */
 function showToast(message, type = "success") {
   const colors = {
-    success: "bg-emerald-600",
-    error: "bg-red-600",
+    success: "bg-slate-900 border border-slate-700",
+    error: "bg-rose-600",
     info: "bg-indigo-600"
   };
   const container = document.getElementById("toastContainer");
   const toast = document.createElement("div");
-  toast.className = `toast text-white px-4 py-3 rounded-lg shadow-lg text-sm font-medium ${colors[type]}`;
-  toast.textContent = message;
+  toast.className = `toast text-white px-4 py-3 rounded-xl shadow-xl text-xs font-semibold flex items-center justify-between ${colors[type]}`;
+  toast.innerHTML = `<span>${message}</span>`;
   container.appendChild(toast);
   setTimeout(() => toast.remove(), 3000);
 }
@@ -421,13 +545,20 @@ function calculateTotal() {
   document.getElementById("itemTotalPrice").value = (qty * unitPrice).toFixed(2);
 }
 
-// Derive average cost per unit for an item based on Stock IN history
 function getDerivedAvgUnitPrice(code) {
   const inTxns = transactions.filter(t => t.code.toLowerCase() === code.toLowerCase() && t.type === "IN");
   if (inTxns.length === 0) return 0;
   const totalQty = inTxns.reduce((sum, t) => sum + (t.qty || 0), 0);
   const totalSpent = inTxns.reduce((sum, t) => sum + ((t.qty || 0) * (t.unitPrice || 0)), 0);
   return totalQty > 0 ? totalSpent / totalQty : 0;
+}
+
+function formatLocation(floor, rack, box) {
+  const parts = [];
+  if (floor) parts.push(floor);
+  if (rack) parts.push(`Rack: ${rack}`);
+  if (box) parts.push(`Box: ${box}`);
+  return parts.length > 0 ? parts.join(", ") : "N/A";
 }
 
 /* ============ RENDER: METRICS ============ */
@@ -524,7 +655,7 @@ function downloadPeriodReportCSV() {
     return;
   }
 
-  const rows = [["Date", "Item Code", "Item Name", "Type", "Supplier / Customer", "Quantity", "Unit Price (INR)", "Total Amount (INR)", "Notes"]];
+  const rows = [["Date", "Item Code", "Item Name", "Type", "Supplier / Customer", "Floor", "Rack No", "Box No", "Quantity", "Unit Price (INR)", "Total Amount (INR)", "Notes"]];
   
   [...filteredTxns].sort((a, b) => new Date(b.date) - new Date(a.date)).forEach(t => {
     const uPrice = t.unitPrice ? parseFloat(t.unitPrice) : 0;
@@ -534,6 +665,9 @@ function downloadPeriodReportCSV() {
       t.name,
       t.type,
       t.party || "-",
+      t.floor || "-",
+      t.rack || "-",
+      t.box || "-",
       t.qty,
       uPrice.toFixed(2),
       (t.qty * uPrice).toFixed(2),
@@ -552,9 +686,13 @@ function renderInventory(filter = "") {
   const emptyMsg = document.getElementById("inventoryEmptyMsg");
   tbody.innerHTML = "";
 
+  const term = filter.toLowerCase();
   const filtered = inventory.filter(i =>
-    i.name.toLowerCase().includes(filter.toLowerCase()) ||
-    i.code.toLowerCase().includes(filter.toLowerCase())
+    i.name.toLowerCase().includes(term) ||
+    i.code.toLowerCase().includes(term) ||
+    (i.floor && i.floor.toLowerCase().includes(term)) ||
+    (i.rack && i.rack.toLowerCase().includes(term)) ||
+    (i.box && i.box.toLowerCase().includes(term))
   ).sort((a, b) => a.name.localeCompare(b.name));
 
   if (filtered.length === 0) {
@@ -566,23 +704,25 @@ function renderInventory(filter = "") {
   filtered.forEach(item => {
     const isLow = item.qty < LOW_STOCK_THRESHOLD;
     const badge = isLow
-      ? `<span class="bg-red-100 text-red-700 text-xs font-semibold px-2 py-1 rounded-full">Low Stock</span>`
-      : `<span class="bg-emerald-100 text-emerald-700 text-xs font-semibold px-2 py-1 rounded-full">In Stock</span>`;
+      ? `<span class="inline-flex items-center px-2 py-0.5 rounded-md text-[10px] font-semibold bg-rose-50 text-rose-700 border border-rose-200">Low Stock</span>`
+      : `<span class="inline-flex items-center px-2 py-0.5 rounded-md text-[10px] font-semibold bg-emerald-50 text-emerald-700 border border-emerald-200">In Stock</span>`;
 
     const avgPrice = getDerivedAvgUnitPrice(item.code);
     const itemTotalVal = item.qty * avgPrice;
+    const locText = formatLocation(item.floor, item.rack, item.box);
 
     const row = document.createElement("tr");
-    row.className = "border-b border-slate-100 hover:bg-slate-50";
+    row.className = "hover:bg-slate-50/80 transition";
     row.innerHTML = `
-      <td class="py-2 pr-2 font-mono text-xs text-slate-500">${escapeHtml(item.code)}</td>
-      <td class="py-2 pr-2 font-medium">${escapeHtml(item.name)}</td>
-      <td class="py-2 pr-2 font-semibold">${item.qty}</td>
-      <td class="py-2 pr-2 text-slate-600">₹${avgPrice.toFixed(2)}</td>
-      <td class="py-2 pr-2 font-semibold text-slate-700">₹${itemTotalVal.toFixed(2)}</td>
-      <td class="py-2 pr-2">${badge}</td>
-      <td class="py-2 pr-2">
-        <button onclick="deleteItem('${escapeHtml(item.code)}')" class="text-xs text-red-500 hover:text-red-700 font-medium">Delete</button>
+      <td class="py-3 px-3 font-mono text-[11px] font-bold text-slate-500">${escapeHtml(item.code)}</td>
+      <td class="py-3 px-3 font-bold text-slate-800">${escapeHtml(item.name)}</td>
+      <td class="py-3 px-3 text-[11px] font-semibold text-indigo-600 bg-indigo-50/40 rounded-lg">${escapeHtml(locText)}</td>
+      <td class="py-3 px-3 font-bold text-slate-900">${item.qty}</td>
+      <td class="py-3 px-3 text-slate-500">₹${avgPrice.toFixed(2)}</td>
+      <td class="py-3 px-3 font-bold text-slate-800">₹${itemTotalVal.toFixed(2)}</td>
+      <td class="py-3 px-3">${badge}</td>
+      <td class="py-3 px-3 text-right">
+        <button onclick="deleteItem('${escapeHtml(item.code)}')" class="text-rose-500 hover:text-rose-700 font-semibold text-[11px] transition">Remove</button>
       </td>
     `;
     tbody.appendChild(row);
@@ -605,23 +745,24 @@ function renderTransactions() {
 
   sorted.forEach(txn => {
     const badge = txn.type === "IN"
-      ? `<span class="bg-emerald-100 text-emerald-700 text-xs font-semibold px-2 py-1 rounded-full">IN</span>`
-      : `<span class="bg-red-100 text-red-700 text-xs font-semibold px-2 py-1 rounded-full">OUT</span>`;
+      ? `<span class="inline-flex items-center px-2 py-0.5 rounded-md text-[10px] font-bold bg-emerald-100 text-emerald-800">IN</span>`
+      : `<span class="inline-flex items-center px-2 py-0.5 rounded-md text-[10px] font-bold bg-rose-100 text-rose-800">OUT</span>`;
     const qtyDisplay = txn.type === "IN" ? `+${txn.qty}` : `-${txn.qty}`;
     const unitP = txn.unitPrice ? parseFloat(txn.unitPrice) : 0;
     const totalP = (txn.qty || 0) * unitP;
+    const locText = formatLocation(txn.floor, txn.rack, txn.box);
 
     const row = document.createElement("tr");
-    row.className = "border-b border-slate-100 hover:bg-slate-50";
+    row.className = "hover:bg-slate-50/80 transition";
     row.innerHTML = `
-      <td class="py-2 pr-2 text-xs text-slate-500 whitespace-nowrap">${formatDate(txn.date)}</td>
-      <td class="py-2 pr-2 font-medium">${escapeHtml(txn.name)}</td>
-      <td class="py-2 pr-2">${badge}</td>
-      <td class="py-2 pr-2 text-slate-700 font-medium">${escapeHtml(txn.party || "-")}</td>
-      <td class="py-2 pr-2 font-semibold">${qtyDisplay}</td>
-      <td class="py-2 pr-2 text-slate-600">₹${unitP.toFixed(2)}</td>
-      <td class="py-2 pr-2 font-semibold text-slate-700">₹${totalP.toFixed(2)}</td>
-      <td class="py-2 pr-2 text-slate-500">${escapeHtml(txn.notes || "-")}</td>
+      <td class="py-3 px-3 text-[11px] text-slate-400 whitespace-nowrap">${formatDate(txn.date)}</td>
+      <td class="py-3 px-3 font-bold text-slate-800">${escapeHtml(txn.name)}</td>
+      <td class="py-3 px-3">${badge}</td>
+      <td class="py-3 px-3 text-slate-600 font-medium">${escapeHtml(txn.party || "-")}</td>
+      <td class="py-3 px-3 text-[11px] text-slate-500">${escapeHtml(locText)}</td>
+      <td class="py-3 px-3 font-bold text-slate-900">${qtyDisplay}</td>
+      <td class="py-3 px-3 text-slate-500">₹${unitP.toFixed(2)}</td>
+      <td class="py-3 px-3 font-bold text-slate-800">₹${totalP.toFixed(2)}</td>
     `;
     tbody.appendChild(row);
   });
@@ -643,6 +784,11 @@ document.getElementById("stockForm").addEventListener("submit", function (e) {
   const name = document.getElementById("itemName").value.trim();
   const type = document.querySelector('input[name="txnType"]:checked').value;
   const party = document.getElementById("itemParty").value.trim();
+  
+  const floor = document.getElementById("itemFloor").value;
+  const rack = document.getElementById("itemRack").value.trim();
+  const box = document.getElementById("itemBox").value.trim();
+
   const dateVal = document.getElementById("itemDate").value;
   const qty = parseInt(document.getElementById("itemQty").value, 10);
   const unitPrice = parseFloat(document.getElementById("itemUnitPrice").value) || 0;
@@ -676,8 +822,11 @@ document.getElementById("stockForm").addEventListener("submit", function (e) {
     if (item) {
       item.qty += qty;
       item.name = name;
+      item.floor = floor;
+      item.rack = rack;
+      item.box = box;
     } else {
-      item = { code, name, qty };
+      item = { code, name, qty, floor, rack, box };
       inventory.push(item);
     }
   }
@@ -692,6 +841,9 @@ document.getElementById("stockForm").addEventListener("submit", function (e) {
     name: item.name,
     type,
     party,
+    floor,
+    rack,
+    box,
     qty,
     unitPrice,
     notes
@@ -730,11 +882,14 @@ codeInput.addEventListener("input", () => {
   }
   matches.forEach(m => {
     const div = document.createElement("div");
-    div.className = "px-3 py-2 hover:bg-indigo-50 cursor-pointer text-sm flex justify-between";
-    div.innerHTML = `<span class="font-mono text-xs text-slate-500">${escapeHtml(m.code)}</span><span class="font-medium">${escapeHtml(m.name)}</span>`;
+    div.className = "px-3.5 py-2 hover:bg-slate-50 cursor-pointer text-xs flex justify-between items-center transition border-b border-slate-100 last:border-0";
+    div.innerHTML = `<span class="font-mono text-slate-400 font-bold">${escapeHtml(m.code)}</span><span class="font-semibold text-slate-800">${escapeHtml(m.name)}</span>`;
     div.onclick = () => {
       codeInput.value = m.code;
       nameInput.value = m.name;
+      if (m.floor) document.getElementById("itemFloor").value = m.floor;
+      if (m.rack) document.getElementById("itemRack").value = m.rack;
+      if (m.box) document.getElementById("itemBox").value = m.box;
       const lastPrice = getDerivedAvgUnitPrice(m.code);
       document.getElementById("itemUnitPrice").value = lastPrice.toFixed(2);
       calculateTotal();
@@ -750,6 +905,9 @@ codeInput.addEventListener("blur", () => {
   const exact = inventory.find(i => i.code.toLowerCase() === codeInput.value.trim().toLowerCase());
   if (exact) {
     nameInput.value = exact.name;
+    if (exact.floor) document.getElementById("itemFloor").value = exact.floor;
+    if (exact.rack) document.getElementById("itemRack").value = exact.rack;
+    if (exact.box) document.getElementById("itemBox").value = exact.box;
     const lastPrice = getDerivedAvgUnitPrice(exact.code);
     document.getElementById("itemUnitPrice").value = lastPrice.toFixed(2);
     calculateTotal();
@@ -767,14 +925,14 @@ document.getElementById("searchInventory").addEventListener("input", (e) => {
   renderInventory(e.target.value);
 });
 
-/* ============ DELETE ITEM (PROTECTED) ============ */
+/* ============ DELETE ITEM ============ */
 function deleteItem(code) {
   if (!verifyPin(`delete item "${code}"`)) return;
   if (!confirm(`Delete item "${code}" from inventory? This does not remove its transaction history.`)) return;
   inventory = inventory.filter(i => i.code !== code);
   saveData();
   renderAll();
-  showToast("Item deleted.", "info");
+  showToast("Item removed from catalog.", "info");
 }
 
 /* ============ CSV EXPORT ============ */
@@ -794,20 +952,20 @@ function downloadCSV(filename, rows) {
 }
 
 function exportInventoryCSV() {
-  const rows = [["Item Code", "Item Name", "Quantity", "Avg Price/Unit (INR)", "Total Value (INR)", "Status"]];
+  const rows = [["Item Code", "Item Name", "Floor", "Rack No", "Box No", "Quantity", "Avg Price/Unit (INR)", "Total Value (INR)", "Status"]];
   inventory.forEach(i => {
     const avgP = getDerivedAvgUnitPrice(i.code);
-    rows.push([i.code, i.name, i.qty, avgP.toFixed(2), (i.qty * avgP).toFixed(2), i.qty < LOW_STOCK_THRESHOLD ? "Low Stock" : "In Stock"]);
+    rows.push([i.code, i.name, i.floor || "-", i.rack || "-", i.box || "-", i.qty, avgP.toFixed(2), (i.qty * avgP).toFixed(2), i.qty < LOW_STOCK_THRESHOLD ? "Low Stock" : "In Stock"]);
   });
   downloadCSV(`inventory_export_${dateStamp()}.csv`, rows);
   showToast("Inventory exported to CSV.", "success");
 }
 
 function exportTransactionsCSV() {
-  const rows = [["Date", "Item Code", "Item Name", "Type", "Supplier / Customer", "Quantity", "Unit Price (INR)", "Total Amount (INR)", "Notes"]];
+  const rows = [["Date", "Item Code", "Item Name", "Type", "Supplier / Customer", "Floor", "Rack No", "Box No", "Quantity", "Unit Price (INR)", "Total Amount (INR)", "Notes"]];
   [...transactions].sort((a, b) => new Date(b.date) - new Date(a.date)).forEach(t => {
     const uPrice = t.unitPrice ? parseFloat(t.unitPrice) : 0;
-    rows.push([formatDate(t.date), t.code, t.name, t.type, t.party || "-", t.qty, uPrice.toFixed(2), (t.qty * uPrice).toFixed(2), t.notes || ""]);
+    rows.push([formatDate(t.date), t.code, t.name, t.type, t.party || "-", t.floor || "-", t.rack || "-", t.box || "-", t.qty, uPrice.toFixed(2), (t.qty * uPrice).toFixed(2), t.notes || ""]);
   });
   downloadCSV(`transactions_export_${dateStamp()}.csv`, rows);
   showToast("Transaction log exported to CSV.", "success");
@@ -825,7 +983,7 @@ function backupJSON() {
   a.click();
   document.body.removeChild(a);
   URL.revokeObjectURL(url);
-  showToast("Backup file downloaded.", "success");
+  showToast("Database backup downloaded.", "success");
 }
 
 function restoreJSON(event) {
@@ -852,7 +1010,7 @@ function restoreJSON(event) {
       transactions = data.transactions;
       saveData();
       renderAll();
-      showToast("Data restored successfully.", "success");
+      showToast("Database restored successfully.", "success");
     } catch (err) {
       showToast("Invalid backup file.", "error");
     }
@@ -870,7 +1028,7 @@ function resetAppData() {
   transactions = [];
   saveData();
   renderAll();
-  showToast("App data has been cleared.", "info");
+  showToast("System data cleared.", "info");
 }
 
 /* ============ HELPERS ============ */
