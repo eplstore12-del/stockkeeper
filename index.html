@@ -1,0 +1,967 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>StockKeeper Pro - Offline Inventory Manager</title>
+<script src="https://cdn.tailwindcss.com"></script>
+<style>
+  ::-webkit-scrollbar { height: 8px; width: 8px; }
+  ::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 4px; }
+  .toast { animation: slideIn 0.3s ease, fadeOut 0.3s ease 2.7s forwards; }
+  @keyframes slideIn { from { transform: translateX(120%); opacity:0; } to { transform: translateX(0); opacity:1; } }
+  @keyframes fadeOut { to { opacity: 0; transform: translateX(120%); } }
+  .autocomplete-list { max-height: 220px; overflow-y:auto; }
+</style>
+</head>
+<body class="bg-slate-100 min-h-screen text-slate-800">
+
+<div id="toastContainer" class="fixed top-4 right-4 z-50 flex flex-col gap-2 w-80"></div>
+
+<!-- PASSWORD MODAL -->
+<div id="passwordModal" class="fixed inset-0 bg-black/40 z-50 hidden items-center justify-center p-4">
+  <div class="bg-white rounded-xl shadow-xl w-full max-w-sm p-5">
+    <h3 id="pwModalTitle" class="font-bold text-slate-800 mb-1">Enter Password</h3>
+    <p id="pwModalSubtitle" class="text-xs text-slate-500 mb-3">This action is protected.</p>
+    <input type="password" id="pwInput1" placeholder="Password" autocomplete="off"
+      class="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm mb-2 focus:ring-2 focus:ring-indigo-500 outline-none">
+    <input type="password" id="pwInput2" placeholder="Confirm Password" autocomplete="off"
+      class="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm mb-2 focus:ring-2 focus:ring-indigo-500 outline-none hidden">
+    <p id="pwError" class="text-xs text-red-600 mb-2 hidden"></p>
+    <div class="flex gap-2 mt-3">
+      <button onclick="cancelPasswordModal()" id="pwCancelBtn" class="flex-1 border border-slate-300 text-slate-600 py-2 rounded-lg text-sm font-medium">Cancel</button>
+      <button onclick="submitPasswordModal()" class="flex-1 bg-indigo-600 text-white py-2 rounded-lg text-sm font-medium">Confirm</button>
+    </div>
+  </div>
+</div>
+
+<!-- HEADER -->
+<header class="bg-white border-b border-slate-200 sticky top-0 z-30 shadow-sm">
+  <div class="max-w-7xl mx-auto px-4 py-3 flex flex-wrap items-center justify-between gap-3">
+    <div class="flex items-center gap-2">
+      <div class="bg-indigo-600 text-white rounded-lg w-9 h-9 flex items-center justify-center font-bold text-lg">S</div>
+      <div>
+        <h1 class="text-lg font-bold leading-tight">StockKeeper Pro</h1>
+        <p id="autosaveStatus" class="text-xs text-slate-400 leading-tight">📄 Autosave: Not connected</p>
+      </div>
+    </div>
+    <div class="flex flex-wrap items-center gap-2">
+      <button onclick="changePasswordFlow()" class="text-sm bg-purple-50 text-purple-700 border border-purple-200 hover:bg-purple-100 px-3 py-2 rounded-lg font-medium transition">🔒 Password</button>
+      <button onclick="connectSaveFile()" class="text-sm bg-sky-50 text-sky-700 border border-sky-200 hover:bg-sky-100 px-3 py-2 rounded-lg font-medium transition">🔗 Connect Save File</button>
+      <button onclick="exportInventoryCSV()" class="text-sm bg-emerald-50 text-emerald-700 border border-emerald-200 hover:bg-emerald-100 px-3 py-2 rounded-lg font-medium transition">⬇ Inventory CSV</button>
+      <button onclick="exportTransactionsCSV()" class="text-sm bg-emerald-50 text-emerald-700 border border-emerald-200 hover:bg-emerald-100 px-3 py-2 rounded-lg font-medium transition">⬇ Logs CSV</button>
+      <button onclick="backupJSON()" class="text-sm bg-indigo-50 text-indigo-700 border border-indigo-200 hover:bg-indigo-100 px-3 py-2 rounded-lg font-medium transition">💾 Backup</button>
+      <label class="text-sm bg-amber-50 text-amber-700 border border-amber-200 hover:bg-amber-100 px-3 py-2 rounded-lg font-medium transition cursor-pointer">
+        ⤴ Restore
+        <input type="file" id="restoreInput" accept=".json" class="hidden" onchange="restoreJSON(event)">
+      </label>
+      <button onclick="resetAppData()" class="text-sm bg-red-50 text-red-700 border border-red-200 hover:bg-red-100 px-3 py-2 rounded-lg font-medium transition">🗑 Reset</button>
+    </div>
+  </div>
+</header>
+
+<main class="max-w-7xl mx-auto px-4 py-6 space-y-6">
+
+  <!-- METRICS -->
+  <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+    <div class="bg-white rounded-xl shadow-sm border border-slate-200 p-4 flex items-center justify-between">
+      <div>
+        <p class="text-xs text-slate-500 font-medium">Total Items</p>
+        <p id="metricTotalItems" class="text-2xl font-bold text-slate-800">0</p>
+      </div>
+      <div class="w-10 h-10 rounded-lg bg-indigo-50 flex items-center justify-center text-xl">📦</div>
+    </div>
+    <div class="bg-white rounded-xl shadow-sm border border-slate-200 p-4 flex items-center justify-between">
+      <div>
+        <p class="text-xs text-slate-500 font-medium">Low Stock Warnings</p>
+        <p id="metricLowStock" class="text-2xl font-bold text-red-600">0</p>
+      </div>
+      <div class="w-10 h-10 rounded-lg bg-red-50 flex items-center justify-center text-xl">⚠️</div>
+    </div>
+    <div class="bg-white rounded-xl shadow-sm border border-slate-200 p-4 flex items-center justify-between">
+      <div>
+        <p class="text-xs text-slate-500 font-medium">Total Units in Stock</p>
+        <p id="metricTotalUnits" class="text-2xl font-bold text-emerald-600">0</p>
+      </div>
+      <div class="w-10 h-10 rounded-lg bg-emerald-50 flex items-center justify-center text-xl">📊</div>
+    </div>
+    <div class="bg-white rounded-xl shadow-sm border border-slate-200 p-4 flex items-center justify-between">
+      <div>
+        <p class="text-xs text-slate-500 font-medium">Total Stock Value</p>
+        <p id="metricTotalValue" class="text-2xl font-bold text-purple-600">₹0</p>
+      </div>
+      <div class="w-10 h-10 rounded-lg bg-purple-50 flex items-center justify-center text-xl">₹</div>
+    </div>
+  </div>
+
+  <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
+
+    <!-- ENTRY FORM -->
+    <div class="lg:col-span-1">
+      <div class="bg-white rounded-xl shadow-sm border border-slate-200 p-5 sticky top-20">
+        <h2 class="font-bold text-slate-800 mb-4 flex items-center gap-2">✏️ Stock Entry</h2>
+        <form id="stockForm" class="space-y-3" autocomplete="off">
+          <div class="relative">
+            <label class="text-xs font-semibold text-slate-500">Item Code / Barcode</label>
+            <input id="itemCode" type="text" required placeholder="e.g. SKU-001"
+              class="w-full mt-1 px-3 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 outline-none text-sm">
+            <div id="codeSuggestions" class="autocomplete-list hidden absolute z-40 bg-white border border-slate-200 rounded-lg shadow-lg w-full mt-1"></div>
+          </div>
+
+          <div>
+            <label class="text-xs font-semibold text-slate-500">Item Name</label>
+            <input id="itemName" type="text" required placeholder="e.g. Blue Cotton Shirt"
+              class="w-full mt-1 px-3 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 outline-none text-sm">
+          </div>
+
+          <div>
+            <label class="text-xs font-semibold text-slate-500">Transaction Type</label>
+            <div class="grid grid-cols-2 gap-2 mt-1">
+              <label class="cursor-pointer">
+                <input type="radio" name="txnType" value="IN" class="peer hidden" checked>
+                <div class="text-center py-2 rounded-lg border-2 border-slate-200 peer-checked:border-emerald-500 peer-checked:bg-emerald-50 peer-checked:text-emerald-700 font-semibold text-sm transition">Stock IN (+)</div>
+              </label>
+              <label class="cursor-pointer">
+                <input type="radio" name="txnType" value="OUT" class="peer hidden">
+                <div class="text-center py-2 rounded-lg border-2 border-slate-200 peer-checked:border-red-500 peer-checked:bg-red-50 peer-checked:text-red-700 font-semibold text-sm transition">Stock OUT (-)</div>
+              </label>
+            </div>
+          </div>
+
+          <div class="grid grid-cols-2 gap-2">
+            <div>
+              <label class="text-xs font-semibold text-slate-500">Date</label>
+              <input id="itemDate" type="date" required
+                class="w-full mt-1 px-3 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 outline-none text-sm">
+            </div>
+            <div>
+              <label class="text-xs font-semibold text-slate-500">Quantity</label>
+              <input id="itemQty" type="number" min="1" value="1" required
+                class="w-full mt-1 px-3 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 outline-none text-sm">
+            </div>
+          </div>
+
+          <div>
+            <label class="text-xs font-semibold text-slate-500">Price per Unit (₹)</label>
+            <input id="itemPrice" type="number" min="0" step="0.01" required placeholder="0.00"
+              class="w-full mt-1 px-3 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 outline-none text-sm">
+            <p class="text-xs text-slate-400 mt-1">Total: <span id="totalPreview" class="font-semibold text-slate-600">₹0.00</span></p>
+          </div>
+
+          <div>
+            <label class="text-xs font-semibold text-slate-500">Remarks / Notes</label>
+            <input id="itemNotes" type="text" placeholder="Optional"
+              class="w-full mt-1 px-3 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 outline-none text-sm">
+          </div>
+
+          <button type="submit" class="w-full bg-indigo-600 hover:bg-indigo-700 text-white font-semibold py-2.5 rounded-lg transition text-sm">
+            🔒 Submit Transaction
+          </button>
+        </form>
+      </div>
+    </div>
+
+    <!-- TABLES -->
+    <div class="lg:col-span-2 space-y-6">
+
+      <!-- INVENTORY -->
+      <div class="bg-white rounded-xl shadow-sm border border-slate-200 p-5">
+        <div class="flex flex-wrap items-center justify-between gap-2 mb-3">
+          <h2 class="font-bold text-slate-800 flex items-center gap-2">📋 Live Inventory</h2>
+          <input id="searchInventory" type="text" placeholder="Search by name or code..."
+            class="px-3 py-1.5 border border-slate-300 rounded-lg text-sm focus:ring-2 focus:ring-indigo-500 outline-none w-56">
+        </div>
+        <div class="overflow-x-auto">
+          <table class="w-full text-sm">
+            <thead>
+              <tr class="text-left text-xs text-slate-500 border-b border-slate-200">
+                <th class="py-2 pr-2">Code</th>
+                <th class="py-2 pr-2">Item Name</th>
+                <th class="py-2 pr-2">Qty</th>
+                <th class="py-2 pr-2">Avg Cost</th>
+                <th class="py-2 pr-2">Stock Value</th>
+                <th class="py-2 pr-2">Status</th>
+                <th class="py-2 pr-2">Action</th>
+              </tr>
+            </thead>
+            <tbody id="inventoryTableBody"></tbody>
+          </table>
+          <p id="inventoryEmptyMsg" class="text-center text-slate-400 text-sm py-6 hidden">No items found.</p>
+        </div>
+      </div>
+
+      <!-- TRANSACTIONS -->
+      <div class="bg-white rounded-xl shadow-sm border border-slate-200 p-5">
+        <h2 class="font-bold text-slate-800 mb-3 flex items-center gap-2">🧾 Transaction Log</h2>
+        <div class="overflow-x-auto max-h-96 overflow-y-auto">
+          <table class="w-full text-sm">
+            <thead class="sticky top-0 bg-white">
+              <tr class="text-left text-xs text-slate-500 border-b border-slate-200">
+                <th class="py-2 pr-2">Date</th>
+                <th class="py-2 pr-2">Item</th>
+                <th class="py-2 pr-2">Type</th>
+                <th class="py-2 pr-2">Qty</th>
+                <th class="py-2 pr-2">Price</th>
+                <th class="py-2 pr-2">Total</th>
+                <th class="py-2 pr-2">Notes</th>
+              </tr>
+            </thead>
+            <tbody id="txnTableBody"></tbody>
+          </table>
+          <p id="txnEmptyMsg" class="text-center text-slate-400 text-sm py-6 hidden">No transactions yet.</p>
+        </div>
+      </div>
+
+      <!-- REPORTS -->
+      <div class="bg-white rounded-xl shadow-sm border border-slate-200 p-5">
+        <h2 class="font-bold text-slate-800 mb-3 flex items-center gap-2">📈 Reports</h2>
+        <div class="flex flex-wrap items-end gap-3 mb-4">
+          <div>
+            <label class="text-xs font-semibold text-slate-500">Period</label>
+            <select id="reportPeriod" class="block mt-1 px-3 py-2 border border-slate-300 rounded-lg text-sm focus:ring-2 focus:ring-indigo-500 outline-none">
+              <option value="month">This Month</option>
+              <option value="6m">Last 6 Months</option>
+              <option value="12m">Last 12 Months</option>
+              <option value="custom">Custom Range</option>
+            </select>
+          </div>
+          <div id="customRangeWrap" class="hidden flex gap-2">
+            <div>
+              <label class="text-xs font-semibold text-slate-500">From</label>
+              <input id="reportStart" type="date" class="block mt-1 px-3 py-2 border border-slate-300 rounded-lg text-sm focus:ring-2 focus:ring-indigo-500 outline-none">
+            </div>
+            <div>
+              <label class="text-xs font-semibold text-slate-500">To</label>
+              <input id="reportEnd" type="date" class="block mt-1 px-3 py-2 border border-slate-300 rounded-lg text-sm focus:ring-2 focus:ring-indigo-500 outline-none">
+            </div>
+          </div>
+          <button onclick="generateReport()" class="bg-indigo-600 hover:bg-indigo-700 text-white text-sm font-medium px-4 py-2 rounded-lg transition">Generate Report</button>
+          <button onclick="exportReportCSV()" class="bg-emerald-50 text-emerald-700 border border-emerald-200 hover:bg-emerald-100 text-sm font-medium px-4 py-2 rounded-lg transition">⬇ Export Report CSV</button>
+        </div>
+
+        <div id="reportSummary" class="grid grid-cols-2 sm:grid-cols-4 gap-3 mb-4 hidden">
+          <div class="bg-emerald-50 rounded-lg p-3">
+            <p class="text-xs text-emerald-700 font-medium">Purchase Value (IN)</p>
+            <p id="reportInValue" class="text-lg font-bold text-emerald-700">₹0</p>
+          </div>
+          <div class="bg-red-50 rounded-lg p-3">
+            <p class="text-xs text-red-700 font-medium">Sales Value (OUT)</p>
+            <p id="reportOutValue" class="text-lg font-bold text-red-700">₹0</p>
+          </div>
+          <div class="bg-indigo-50 rounded-lg p-3">
+            <p class="text-xs text-indigo-700 font-medium">Units IN</p>
+            <p id="reportInQty" class="text-lg font-bold text-indigo-700">0</p>
+          </div>
+          <div class="bg-amber-50 rounded-lg p-3">
+            <p class="text-xs text-amber-700 font-medium">Units OUT</p>
+            <p id="reportOutQty" class="text-lg font-bold text-amber-700">0</p>
+          </div>
+        </div>
+
+        <div class="overflow-x-auto">
+          <table class="w-full text-sm">
+            <thead>
+              <tr class="text-left text-xs text-slate-500 border-b border-slate-200">
+                <th class="py-2 pr-2">Item</th>
+                <th class="py-2 pr-2">Qty IN</th>
+                <th class="py-2 pr-2">Value IN</th>
+                <th class="py-2 pr-2">Qty OUT</th>
+                <th class="py-2 pr-2">Value OUT</th>
+              </tr>
+            </thead>
+            <tbody id="reportTableBody"></tbody>
+          </table>
+          <p id="reportEmptyMsg" class="text-center text-slate-400 text-sm py-6">Select a period and click Generate Report.</p>
+        </div>
+      </div>
+
+    </div>
+  </div>
+</main>
+
+<script>
+/* ============ STORAGE KEYS ============ */
+const INV_KEY = "sk_inventory_v2";
+const TXN_KEY = "sk_transactions_v2";
+const PW_KEY = "sk_password_hash";
+const LOW_STOCK_THRESHOLD = 5;
+
+/* ============ STATE ============ */
+let inventory = [];
+let transactions = [];
+let fileHandle = null;
+let fileSupported = "showSaveFilePicker" in window;
+let lastReportData = null;
+
+/* ============ PASSWORD PROTECTION ============ */
+async function sha256(text) {
+  const enc = new TextEncoder().encode(text);
+  const buf = await crypto.subtle.digest("SHA-256", enc);
+  return Array.from(new Uint8Array(buf)).map(b => b.toString(16).padStart(2, "0")).join("");
+}
+
+let pwPendingResolve = null;
+let pwMode = "verify";
+
+function openPasswordModal(mode, allowCancel = true) {
+  pwMode = mode;
+  document.getElementById("pwError").classList.add("hidden");
+  document.getElementById("pwInput1").value = "";
+  document.getElementById("pwInput2").value = "";
+  const title = document.getElementById("pwModalTitle");
+  const subtitle = document.getElementById("pwModalSubtitle");
+  const input2 = document.getElementById("pwInput2");
+  const cancelBtn = document.getElementById("pwCancelBtn");
+  cancelBtn.style.display = allowCancel ? "block" : "none";
+
+  if (mode === "setup") {
+    title.textContent = "Set a Password";
+    subtitle.textContent = "This protects adding, removing, and resetting stock data.";
+    input2.classList.remove("hidden");
+  } else {
+    title.textContent = "Enter Password";
+    subtitle.textContent = "This action is protected.";
+    input2.classList.add("hidden");
+  }
+  document.getElementById("passwordModal").classList.remove("hidden");
+  document.getElementById("passwordModal").classList.add("flex");
+  setTimeout(() => document.getElementById("pwInput1").focus(), 50);
+  return new Promise((resolve) => { pwPendingResolve = resolve; });
+}
+
+function closePasswordModal() {
+  document.getElementById("passwordModal").classList.add("hidden");
+  document.getElementById("passwordModal").classList.remove("flex");
+}
+
+function resolveAndClear(result) {
+  if (pwPendingResolve) pwPendingResolve(result);
+  pwPendingResolve = null;
+}
+
+function cancelPasswordModal() {
+  closePasswordModal();
+  resolveAndClear(false);
+}
+
+async function submitPasswordModal() {
+  const errEl = document.getElementById("pwError");
+  const val1 = document.getElementById("pwInput1").value;
+
+  if (pwMode === "setup") {
+    const val2 = document.getElementById("pwInput2").value;
+    if (!val1 || val1.length < 4) { errEl.textContent = "Password must be at least 4 characters."; errEl.classList.remove("hidden"); return; }
+    if (val1 !== val2) { errEl.textContent = "Passwords do not match."; errEl.classList.remove("hidden"); return; }
+    const hash = await sha256(val1);
+    localStorage.setItem(PW_KEY, hash);
+    closePasswordModal();
+    showToast("Password set successfully.", "success");
+    resolveAndClear(true);
+    return;
+  }
+
+  const storedHash = localStorage.getItem(PW_KEY);
+  const enteredHash = await sha256(val1);
+  if (enteredHash !== storedHash) {
+    errEl.textContent = "Incorrect password.";
+    errEl.classList.remove("hidden");
+    return;
+  }
+  closePasswordModal();
+  resolveAndClear(true);
+}
+
+async function requirePassword() {
+  if (!localStorage.getItem(PW_KEY)) {
+    showToast("Set a password first to protect your data.", "info");
+    return await openPasswordModal("setup", false);
+  }
+  return await openPasswordModal("verify", true);
+}
+
+async function changePasswordFlow() {
+  if (!localStorage.getItem(PW_KEY)) {
+    await openPasswordModal("setup", false);
+    return;
+  }
+  const verified = await openPasswordModal("verify", true);
+  if (!verified) return;
+  await openPasswordModal("setup", true);
+}
+
+/* ============ INDEXEDDB (stores the autosave file handle) ============ */
+function openHandleDB() {
+  return new Promise((resolve, reject) => {
+    const req = indexedDB.open("sk_filehandles", 1);
+    req.onupgradeneeded = () => req.result.createObjectStore("handles");
+    req.onsuccess = () => resolve(req.result);
+    req.onerror = () => reject(req.error);
+  });
+}
+async function idbSet(key, value) {
+  const db = await openHandleDB();
+  return new Promise((resolve, reject) => {
+    const tx = db.transaction("handles", "readwrite");
+    tx.objectStore("handles").put(value, key);
+    tx.oncomplete = () => resolve();
+    tx.onerror = () => reject(tx.error);
+  });
+}
+async function idbGet(key) {
+  const db = await openHandleDB();
+  return new Promise((resolve, reject) => {
+    const tx = db.transaction("handles", "readonly");
+    const req = tx.objectStore("handles").get(key);
+    req.onsuccess = () => resolve(req.result || null);
+    req.onerror = () => reject(req.error);
+  });
+}
+
+/* ============ AUTOSAVE-TO-FILE ============ */
+function setAutosaveStatus(text, ok) {
+  const el = document.getElementById("autosaveStatus");
+  el.textContent = text;
+  el.className = "text-xs leading-tight " + (ok ? "text-emerald-600 font-medium" : "text-slate-400");
+}
+
+async function connectSaveFile() {
+  if (!fileSupported) {
+    showToast("Your browser doesn't support direct file autosave. Use Chrome or Edge on desktop.", "error");
+    return;
+  }
+  try {
+    const handle = await window.showSaveFilePicker({
+      suggestedName: "stockkeeper_data.json",
+      types: [{ description: "StockKeeper Data", accept: { "application/json": [".json"] } }]
+    });
+    fileHandle = handle;
+    await idbSet("dataFile", handle);
+    await writeToFile();
+    setAutosaveStatus(`✅ Autosaving to ${handle.name}`, true);
+    showToast("File connected. All changes now autosave here.", "success");
+  } catch (err) {
+    if (err.name !== "AbortError") showToast("Could not connect file.", "error");
+  }
+}
+
+async function tryRestoreFileHandle() {
+  if (!fileSupported) {
+    setAutosaveStatus("📄 Autosave unavailable (use Chrome/Edge)", false);
+    return;
+  }
+  try {
+    const handle = await idbGet("dataFile");
+    if (!handle) return;
+    const perm = await handle.queryPermission({ mode: "readwrite" });
+    fileHandle = handle;
+    if (perm === "granted") {
+      setAutosaveStatus(`✅ Autosaving to ${handle.name}`, true);
+    } else {
+      setAutosaveStatus(`⚠️ Click "Connect Save File" to resume autosave`, false);
+    }
+  } catch (e) { /* no handle stored yet */ }
+}
+
+async function writeToFile() {
+  if (!fileHandle) return;
+  try {
+    let perm = await fileHandle.queryPermission({ mode: "readwrite" });
+    if (perm !== "granted") {
+      perm = await fileHandle.requestPermission({ mode: "readwrite" });
+      if (perm !== "granted") return;
+    }
+    const writable = await fileHandle.createWritable();
+    await writable.write(JSON.stringify({ inventory, transactions, savedAt: new Date().toISOString() }, null, 2));
+    await writable.close();
+    setAutosaveStatus(`✅ Autosaving to ${fileHandle.name}`, true);
+  } catch (err) {
+    setAutosaveStatus("⚠️ Autosave failed — click Connect Save File", false);
+  }
+}
+
+/* ============ INIT ============ */
+function loadData() {
+  const invRaw = localStorage.getItem(INV_KEY);
+  const txnRaw = localStorage.getItem(TXN_KEY);
+  if (invRaw && txnRaw) {
+    inventory = JSON.parse(invRaw);
+    transactions = JSON.parse(txnRaw);
+  } else {
+    inventory = [];
+    transactions = [];
+    saveData();
+  }
+}
+
+function saveData() {
+  localStorage.setItem(INV_KEY, JSON.stringify(inventory));
+  localStorage.setItem(TXN_KEY, JSON.stringify(transactions));
+  writeToFile();
+}
+
+/* ============ TOASTS ============ */
+function showToast(message, type = "success") {
+  const colors = { success: "bg-emerald-600", error: "bg-red-600", info: "bg-indigo-600" };
+  const container = document.getElementById("toastContainer");
+  const toast = document.createElement("div");
+  toast.className = `toast text-white px-4 py-3 rounded-lg shadow-lg text-sm font-medium ${colors[type]}`;
+  toast.textContent = message;
+  container.appendChild(toast);
+  setTimeout(() => toast.remove(), 3000);
+}
+
+/* ============ RENDER: METRICS ============ */
+function renderMetrics() {
+  const totalItems = inventory.length;
+  const lowStock = inventory.filter(i => i.qty < LOW_STOCK_THRESHOLD).length;
+  const totalUnits = inventory.reduce((sum, i) => sum + i.qty, 0);
+  const totalValue = inventory.reduce((sum, i) => sum + (i.qty * (i.avgPrice || 0)), 0);
+
+  document.getElementById("metricTotalItems").textContent = totalItems;
+  document.getElementById("metricLowStock").textContent = lowStock;
+  document.getElementById("metricTotalUnits").textContent = totalUnits;
+  document.getElementById("metricTotalValue").textContent = formatCurrency(totalValue);
+}
+
+/* ============ RENDER: INVENTORY TABLE ============ */
+function renderInventory(filter = "") {
+  const tbody = document.getElementById("inventoryTableBody");
+  const emptyMsg = document.getElementById("inventoryEmptyMsg");
+  tbody.innerHTML = "";
+
+  const filtered = inventory.filter(i =>
+    i.name.toLowerCase().includes(filter.toLowerCase()) ||
+    i.code.toLowerCase().includes(filter.toLowerCase())
+  ).sort((a, b) => a.name.localeCompare(b.name));
+
+  emptyMsg.classList.toggle("hidden", filtered.length !== 0);
+
+  filtered.forEach(item => {
+    const isLow = item.qty < LOW_STOCK_THRESHOLD;
+    const badge = isLow
+      ? `<span class="bg-red-100 text-red-700 text-xs font-semibold px-2 py-1 rounded-full">Low Stock</span>`
+      : `<span class="bg-emerald-100 text-emerald-700 text-xs font-semibold px-2 py-1 rounded-full">In Stock</span>`;
+    const avgPrice = item.avgPrice || 0;
+    const stockValue = item.qty * avgPrice;
+
+    const row = document.createElement("tr");
+    row.className = "border-b border-slate-100 hover:bg-slate-50";
+    row.innerHTML = `
+      <td class="py-2 pr-2 font-mono text-xs text-slate-500">${escapeHtml(item.code)}</td>
+      <td class="py-2 pr-2 font-medium">${escapeHtml(item.name)}</td>
+      <td class="py-2 pr-2 font-semibold">${item.qty}</td>
+      <td class="py-2 pr-2 text-slate-600">${formatCurrency(avgPrice)}</td>
+      <td class="py-2 pr-2 text-slate-600">${formatCurrency(stockValue)}</td>
+      <td class="py-2 pr-2">${badge}</td>
+      <td class="py-2 pr-2">
+        <button onclick="deleteItem('${escapeHtml(item.code)}')" class="text-xs text-red-500 hover:text-red-700 font-medium">🔒 Delete</button>
+      </td>
+    `;
+    tbody.appendChild(row);
+  });
+}
+
+/* ============ RENDER: TRANSACTIONS TABLE ============ */
+function renderTransactions() {
+  const tbody = document.getElementById("txnTableBody");
+  const emptyMsg = document.getElementById("txnEmptyMsg");
+  tbody.innerHTML = "";
+
+  const sorted = [...transactions].sort((a, b) => new Date(b.date) - new Date(a.date));
+  emptyMsg.classList.toggle("hidden", sorted.length !== 0);
+
+  sorted.forEach(txn => {
+    const badge = txn.type === "IN"
+      ? `<span class="bg-emerald-100 text-emerald-700 text-xs font-semibold px-2 py-1 rounded-full">IN</span>`
+      : `<span class="bg-red-100 text-red-700 text-xs font-semibold px-2 py-1 rounded-full">OUT</span>`;
+    const qtyDisplay = txn.type === "IN" ? `+${txn.qty}` : `-${txn.qty}`;
+    const price = txn.price || 0;
+    const total = price * txn.qty;
+
+    const row = document.createElement("tr");
+    row.className = "border-b border-slate-100 hover:bg-slate-50";
+    row.innerHTML = `
+      <td class="py-2 pr-2 text-xs text-slate-500 whitespace-nowrap">${formatDate(txn.date)}</td>
+      <td class="py-2 pr-2 font-medium">${escapeHtml(txn.name)}</td>
+      <td class="py-2 pr-2">${badge}</td>
+      <td class="py-2 pr-2 font-semibold">${qtyDisplay}</td>
+      <td class="py-2 pr-2 text-slate-600">${formatCurrency(price)}</td>
+      <td class="py-2 pr-2 text-slate-600">${formatCurrency(total)}</td>
+      <td class="py-2 pr-2 text-slate-500">${escapeHtml(txn.notes || "-")}</td>
+    `;
+    tbody.appendChild(row);
+  });
+}
+
+/* ============ RENDER ALL ============ */
+function renderAll() {
+  renderMetrics();
+  renderInventory(document.getElementById("searchInventory").value);
+  renderTransactions();
+}
+
+/* ============ LIVE TOTAL PREVIEW ============ */
+function updateTotalPreview() {
+  const qty = parseFloat(document.getElementById("itemQty").value) || 0;
+  const price = parseFloat(document.getElementById("itemPrice").value) || 0;
+  document.getElementById("totalPreview").textContent = formatCurrency(qty * price);
+}
+document.getElementById("itemQty").addEventListener("input", updateTotalPreview);
+document.getElementById("itemPrice").addEventListener("input", updateTotalPreview);
+
+/* ============ FORM SUBMIT (password protected) ============ */
+document.getElementById("stockForm").addEventListener("submit", async function (e) {
+  e.preventDefault();
+
+  const code = document.getElementById("itemCode").value.trim();
+  const name = document.getElementById("itemName").value.trim();
+  const type = document.querySelector('input[name="txnType"]:checked').value;
+  const dateVal = document.getElementById("itemDate").value;
+  const qty = parseInt(document.getElementById("itemQty").value, 10);
+  const price = parseFloat(document.getElementById("itemPrice").value);
+  const notes = document.getElementById("itemNotes").value.trim();
+
+  if (!code || !name) { showToast("Item code and name are required.", "error"); return; }
+  if (!qty || qty <= 0) { showToast("Quantity must be greater than 0.", "error"); return; }
+  if (isNaN(price) || price < 0) { showToast("Please enter a valid price per unit.", "error"); return; }
+  if (!dateVal) { showToast("Please select a date.", "error"); return; }
+
+  const ok = await requirePassword();
+  if (!ok) return;
+
+  let item = inventory.find(i => i.code.toLowerCase() === code.toLowerCase());
+
+  if (type === "OUT") {
+    if (!item || item.qty < qty) {
+      showToast(`Insufficient stock! Available: ${item ? item.qty : 0}, Requested: ${qty}`, "error");
+      return;
+    }
+    item.qty -= qty;
+  } else {
+    if (item) {
+      const newQty = item.qty + qty;
+      item.avgPrice = ((item.qty * (item.avgPrice || 0)) + (qty * price)) / newQty;
+      item.qty = newQty;
+      item.name = name;
+    } else {
+      item = { code, name, qty, avgPrice: price };
+      inventory.push(item);
+    }
+  }
+
+  const now = new Date();
+  const [y, m, d] = dateVal.split("-").map(Number);
+  const combinedDate = new Date(y, m - 1, d, now.getHours(), now.getMinutes(), now.getSeconds());
+
+  transactions.push({
+    date: combinedDate.toISOString(),
+    code: item.code,
+    name: item.name,
+    type,
+    qty,
+    price,
+    notes
+  });
+
+  saveData();
+  renderAll();
+  showToast(type === "IN" ? `Stocked IN ${qty} x ${name}` : `Stocked OUT ${qty} x ${name}`, "success");
+
+  document.getElementById("stockForm").reset();
+  document.getElementById("itemQty").value = 1;
+  setTodayDate();
+  updateTotalPreview();
+  document.querySelector('input[name="txnType"][value="IN"]').checked = true;
+  document.getElementById("itemCode").focus();
+});
+
+/* ============ AUTOCOMPLETE ============ */
+const codeInput = document.getElementById("itemCode");
+const nameInput = document.getElementById("itemName");
+const priceInput = document.getElementById("itemPrice");
+const suggestionsBox = document.getElementById("codeSuggestions");
+
+function autofillFromItem(item) {
+  nameInput.value = item.name;
+  priceInput.value = (item.avgPrice || 0).toFixed(2);
+  updateTotalPreview();
+}
+
+codeInput.addEventListener("input", () => {
+  const val = codeInput.value.trim().toLowerCase();
+  suggestionsBox.innerHTML = "";
+  if (!val) { suggestionsBox.classList.add("hidden"); return; }
+  const matches = inventory.filter(i => i.code.toLowerCase().includes(val) || i.name.toLowerCase().includes(val)).slice(0, 6);
+  if (matches.length === 0) { suggestionsBox.classList.add("hidden"); return; }
+  matches.forEach(m => {
+    const div = document.createElement("div");
+    div.className = "px-3 py-2 hover:bg-indigo-50 cursor-pointer text-sm flex justify-between";
+    div.innerHTML = `<span class="font-mono text-xs text-slate-500">${escapeHtml(m.code)}</span><span class="font-medium">${escapeHtml(m.name)}</span>`;
+    div.onclick = () => {
+      codeInput.value = m.code;
+      autofillFromItem(m);
+      suggestionsBox.classList.add("hidden");
+    };
+    suggestionsBox.appendChild(div);
+  });
+  suggestionsBox.classList.remove("hidden");
+});
+
+codeInput.addEventListener("blur", () => {
+  setTimeout(() => suggestionsBox.classList.add("hidden"), 150);
+  const exact = inventory.find(i => i.code.toLowerCase() === codeInput.value.trim().toLowerCase());
+  if (exact) autofillFromItem(exact);
+});
+
+document.addEventListener("click", (e) => {
+  if (!suggestionsBox.contains(e.target) && e.target !== codeInput) {
+    suggestionsBox.classList.add("hidden");
+  }
+});
+
+/* ============ SEARCH ============ */
+document.getElementById("searchInventory").addEventListener("input", (e) => {
+  renderInventory(e.target.value);
+});
+
+/* ============ DELETE ITEM (password protected) ============ */
+async function deleteItem(code) {
+  const ok = await requirePassword();
+  if (!ok) return;
+  if (!confirm(`Delete item "${code}" from inventory? This does not remove its transaction history.`)) return;
+  inventory = inventory.filter(i => i.code !== code);
+  saveData();
+  renderAll();
+  showToast("Item deleted.", "info");
+}
+
+/* ============ CSV EXPORT ============ */
+function downloadCSV(filename, rows) {
+  const csvContent = rows.map(row =>
+    row.map(cell => `"${String(cell).replace(/"/g, '""')}"`).join(",")
+  ).join("\n");
+  const blob = new Blob([csvContent], { type: "text/csv;charset=utf-8;" });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = filename;
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+  URL.revokeObjectURL(url);
+}
+
+function exportInventoryCSV() {
+  const rows = [["Item Code", "Item Name", "Quantity", "Avg Cost", "Stock Value", "Status"]];
+  inventory.forEach(i => {
+    const avgPrice = i.avgPrice || 0;
+    rows.push([i.code, i.name, i.qty, avgPrice.toFixed(2), (i.qty * avgPrice).toFixed(2), i.qty < LOW_STOCK_THRESHOLD ? "Low Stock" : "In Stock"]);
+  });
+  downloadCSV(`inventory_export_${dateStamp()}.csv`, rows);
+  showToast("Inventory exported to CSV.", "success");
+}
+
+function exportTransactionsCSV() {
+  const rows = [["Date", "Item Code", "Item Name", "Type", "Quantity", "Price", "Total", "Notes"]];
+  [...transactions].sort((a, b) => new Date(b.date) - new Date(a.date)).forEach(t => {
+    const price = t.price || 0;
+    rows.push([formatDate(t.date), t.code, t.name, t.type, t.qty, price.toFixed(2), (price * t.qty).toFixed(2), t.notes || ""]);
+  });
+  downloadCSV(`transactions_export_${dateStamp()}.csv`, rows);
+  showToast("Transaction log exported to CSV.", "success");
+}
+
+/* ============ REPORTS ============ */
+document.getElementById("reportPeriod").addEventListener("change", (e) => {
+  document.getElementById("customRangeWrap").classList.toggle("hidden", e.target.value !== "custom");
+});
+
+function getPeriodRange() {
+  const period = document.getElementById("reportPeriod").value;
+  const now = new Date();
+  let start, end = now;
+
+  if (period === "month") {
+    start = new Date(now.getFullYear(), now.getMonth(), 1);
+  } else if (period === "6m") {
+    start = new Date(now.getFullYear(), now.getMonth() - 6, now.getDate());
+  } else if (period === "12m") {
+    start = new Date(now.getFullYear(), now.getMonth() - 12, now.getDate());
+  } else {
+    const s = document.getElementById("reportStart").value;
+    const e = document.getElementById("reportEnd").value;
+    if (!s || !e) return null;
+    start = new Date(s + "T00:00:00");
+    end = new Date(e + "T23:59:59");
+  }
+  return { start, end };
+}
+
+function generateReport() {
+  const range = getPeriodRange();
+  if (!range) { showToast("Please select both From and To dates.", "error"); return; }
+
+  const filtered = transactions.filter(t => {
+    const d = new Date(t.date);
+    return d >= range.start && d <= range.end;
+  });
+
+  let totalInValue = 0, totalOutValue = 0, totalInQty = 0, totalOutQty = 0;
+  const perItem = {};
+
+  filtered.forEach(t => {
+    const price = t.price || 0;
+    const total = price * t.qty;
+    if (!perItem[t.code]) perItem[t.code] = { name: t.name, qtyIn: 0, valueIn: 0, qtyOut: 0, valueOut: 0 };
+    if (t.type === "IN") {
+      totalInValue += total; totalInQty += t.qty;
+      perItem[t.code].qtyIn += t.qty; perItem[t.code].valueIn += total;
+    } else {
+      totalOutValue += total; totalOutQty += t.qty;
+      perItem[t.code].qtyOut += t.qty; perItem[t.code].valueOut += total;
+    }
+  });
+
+  document.getElementById("reportInValue").textContent = formatCurrency(totalInValue);
+  document.getElementById("reportOutValue").textContent = formatCurrency(totalOutValue);
+  document.getElementById("reportInQty").textContent = totalInQty;
+  document.getElementById("reportOutQty").textContent = totalOutQty;
+  document.getElementById("reportSummary").classList.remove("hidden");
+
+  const tbody = document.getElementById("reportTableBody");
+  const emptyMsg = document.getElementById("reportEmptyMsg");
+  tbody.innerHTML = "";
+  const rowsData = Object.values(perItem).sort((a, b) => a.name.localeCompare(b.name));
+
+  emptyMsg.classList.toggle("hidden", rowsData.length !== 0);
+  if (rowsData.length === 0) emptyMsg.textContent = "No transactions in this period.";
+
+  rowsData.forEach(r => {
+    const row = document.createElement("tr");
+    row.className = "border-b border-slate-100 hover:bg-slate-50";
+    row.innerHTML = `
+      <td class="py-2 pr-2 font-medium">${escapeHtml(r.name)}</td>
+      <td class="py-2 pr-2 text-emerald-600">${r.qtyIn}</td>
+      <td class="py-2 pr-2 text-emerald-600">${formatCurrency(r.valueIn)}</td>
+      <td class="py-2 pr-2 text-red-600">${r.qtyOut}</td>
+      <td class="py-2 pr-2 text-red-600">${formatCurrency(r.valueOut)}</td>
+    `;
+    tbody.appendChild(row);
+  });
+
+  lastReportData = { range, rowsData, totalInValue, totalOutValue, totalInQty, totalOutQty };
+}
+
+function exportReportCSV() {
+  if (!lastReportData) { showToast("Generate a report first.", "error"); return; }
+  const rows = [["Item", "Qty IN", "Value IN", "Qty OUT", "Value OUT"]];
+  lastReportData.rowsData.forEach(r => {
+    rows.push([r.name, r.qtyIn, r.valueIn.toFixed(2), r.qtyOut, r.valueOut.toFixed(2)]);
+  });
+  rows.push([]);
+  rows.push(["TOTAL", lastReportData.totalInQty, lastReportData.totalInValue.toFixed(2), lastReportData.totalOutQty, lastReportData.totalOutValue.toFixed(2)]);
+  downloadCSV(`report_${dateStamp()}.csv`, rows);
+  showToast("Report exported to CSV.", "success");
+}
+
+/* ============ JSON BACKUP / RESTORE (password protected) ============ */
+function backupJSON() {
+  const data = { inventory, transactions, exportedAt: new Date().toISOString() };
+  const blob = new Blob([JSON.stringify(data, null, 2)], { type: "application/json" });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = `stockkeeper_backup_${dateStamp()}.json`;
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+  URL.revokeObjectURL(url);
+  showToast("Backup file downloaded.", "success");
+}
+
+async function restoreJSON(event) {
+  const file = event.target.files[0];
+  if (!file) return;
+
+  const ok = await requirePassword();
+  if (!ok) { event.target.value = ""; return; }
+
+  const reader = new FileReader();
+  reader.onload = function (e) {
+    try {
+      const data = JSON.parse(e.target.result);
+      if (!Array.isArray(data.inventory) || !Array.isArray(data.transactions)) {
+        throw new Error("Invalid file structure");
+      }
+      if (!confirm("This will REPLACE all current data with the backup file. Continue?")) {
+        event.target.value = "";
+        return;
+      }
+      inventory = data.inventory;
+      transactions = data.transactions;
+      saveData();
+      renderAll();
+      showToast("Data restored successfully.", "success");
+    } catch (err) {
+      showToast("Invalid backup file.", "error");
+    }
+    event.target.value = "";
+  };
+  reader.readAsText(file);
+}
+
+async function resetAppData() {
+  const ok = await requirePassword();
+  if (!ok) return;
+  if (!confirm("This will permanently erase ALL inventory and transaction data. Are you sure?")) return;
+  localStorage.removeItem(INV_KEY);
+  localStorage.removeItem(TXN_KEY);
+  inventory = [];
+  transactions = [];
+  saveData();
+  renderAll();
+  showToast("App data has been cleared.", "info");
+}
+
+/* ============ HELPERS ============ */
+function escapeHtml(str) {
+  const div = document.createElement("div");
+  div.textContent = str;
+  return div.innerHTML;
+}
+
+function formatDate(iso) {
+  const d = new Date(iso);
+  return d.toLocaleString(undefined, { year: "numeric", month: "short", day: "2-digit", hour: "2-digit", minute: "2-digit" });
+}
+
+function formatCurrency(num) {
+  return "₹" + (num || 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+}
+
+function dateStamp() {
+  const d = new Date();
+  return `${d.getFullYear()}${String(d.getMonth() + 1).padStart(2, "0")}${String(d.getDate()).padStart(2, "0")}_${String(d.getHours()).padStart(2, "0")}${String(d.getMinutes()).padStart(2, "0")}`;
+}
+
+function setTodayDate() {
+  const today = new Date();
+  const yyyy = today.getFullYear();
+  const mm = String(today.getMonth() + 1).padStart(2, "0");
+  const dd = String(today.getDate()).padStart(2, "0");
+  document.getElementById("itemDate").value = `${yyyy}-${mm}-${dd}`;
+}
+
+/* ============ BOOTSTRAP ============ */
+loadData();
+setTodayDate();
+updateTotalPreview();
+renderAll();
+tryRestoreFileHandle();
+if (!localStorage.getItem(PW_KEY)) {
+  setTimeout(() => { openPasswordModal("setup", false); }, 300);
+}
+</script>
+
+</body>
+</html>
