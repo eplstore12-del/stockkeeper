@@ -80,7 +80,7 @@
     <div class="bg-white rounded-xl shadow-sm border border-slate-200 p-4 flex items-center justify-between">
       <div>
         <p class="text-xs text-slate-500 font-medium">Total Inventory Value</p>
-        <p id="metricTotalValue" class="text-2xl font-bold text-indigo-600">$0.00</p>
+        <p id="metricTotalValue" class="text-2xl font-bold text-indigo-600">₹0.00</p>
       </div>
       <div class="w-10 h-10 rounded-lg bg-indigo-50 flex items-center justify-center text-xl">💰</div>
     </div>
@@ -93,31 +93,43 @@
         <h2 class="font-bold text-slate-800 flex items-center gap-2">📈 Period Analytics & Financial Report</h2>
         <p class="text-xs text-slate-500">Summary of stock inflows and outflows based on selected duration</p>
       </div>
-      <div class="flex items-center gap-2">
-        <label class="text-xs font-semibold text-slate-500">Select Period:</label>
-        <select id="reportRangeSelect" onchange="renderReports()" class="border border-slate-300 rounded-lg text-sm px-3 py-1.5 focus:ring-2 focus:ring-indigo-500 outline-none">
+      <div class="flex flex-wrap items-center gap-2">
+        <label class="text-xs font-semibold text-slate-500">Period:</label>
+        <select id="reportRangeSelect" onchange="toggleCustomDateInputs(); renderReports();" class="border border-slate-300 rounded-lg text-sm px-3 py-1.5 focus:ring-2 focus:ring-indigo-500 outline-none">
           <option value="month">This Month</option>
           <option value="6months">Last 6 Months</option>
           <option value="12months" selected>Last 12 Months</option>
           <option value="all">All Time</option>
+          <option value="custom">Custom Range</option>
         </select>
+
+        <!-- Custom Date Range Inputs -->
+        <div id="customDateRangeContainer" class="hidden flex items-center gap-2">
+          <input id="reportStartDate" type="date" onchange="renderReports()" class="border border-slate-300 rounded-lg text-xs px-2 py-1.5 focus:ring-2 focus:ring-indigo-500 outline-none">
+          <span class="text-xs text-slate-400">to</span>
+          <input id="reportEndDate" type="date" onchange="renderReports()" class="border border-slate-300 rounded-lg text-xs px-2 py-1.5 focus:ring-2 focus:ring-indigo-500 outline-none">
+        </div>
+
+        <button onclick="downloadPeriodReportCSV()" class="text-xs bg-indigo-600 hover:bg-indigo-700 text-white font-semibold px-3 py-2 rounded-lg transition shadow-sm ml-2">
+          📥 Download Period Report CSV
+        </button>
       </div>
     </div>
     
     <div class="grid grid-cols-1 sm:grid-cols-3 gap-4">
       <div class="bg-slate-50 p-4 rounded-lg border border-slate-200">
         <p class="text-xs font-medium text-slate-500">Total Purchase Spent (Stock IN)</p>
-        <p id="reportSpent" class="text-xl font-bold text-emerald-700 mt-1">$0.00</p>
+        <p id="reportSpent" class="text-xl font-bold text-emerald-700 mt-1">₹0.00</p>
         <p id="reportUnitsIn" class="text-xs text-slate-400 mt-1">0 units added</p>
       </div>
       <div class="bg-slate-50 p-4 rounded-lg border border-slate-200">
         <p class="text-xs font-medium text-slate-500">Total Stock Value Removed (Stock OUT)</p>
-        <p id="reportOutValue" class="text-xl font-bold text-red-600 mt-1">$0.00</p>
+        <p id="reportOutValue" class="text-xl font-bold text-red-600 mt-1">₹0.00</p>
         <p id="reportUnitsOut" class="text-xs text-slate-400 mt-1">0 units removed</p>
       </div>
       <div class="bg-slate-50 p-4 rounded-lg border border-slate-200">
         <p class="text-xs font-medium text-slate-500">Net Movement Value</p>
-        <p id="reportNetValue" class="text-xl font-bold text-indigo-600 mt-1">$0.00</p>
+        <p id="reportNetValue" class="text-xl font-bold text-indigo-600 mt-1">₹0.00</p>
         <p id="reportTxnCount" class="text-xs text-slate-400 mt-1">0 transactions logged</p>
       </div>
     </div>
@@ -147,14 +159,20 @@
             <label class="text-xs font-semibold text-slate-500">Transaction Type</label>
             <div class="grid grid-cols-2 gap-2 mt-1">
               <label class="cursor-pointer">
-                <input type="radio" name="txnType" value="IN" class="peer hidden" checked>
+                <input type="radio" name="txnType" value="IN" class="peer hidden" checked onchange="updatePartyLabel()">
                 <div class="text-center py-2 rounded-lg border-2 border-slate-200 peer-checked:border-emerald-500 peer-checked:bg-emerald-50 peer-checked:text-emerald-700 font-semibold text-sm transition">Stock IN (+)</div>
               </label>
               <label class="cursor-pointer">
-                <input type="radio" name="txnType" value="OUT" class="peer hidden">
+                <input type="radio" name="txnType" value="OUT" class="peer hidden" onchange="updatePartyLabel()">
                 <div class="text-center py-2 rounded-lg border-2 border-slate-200 peer-checked:border-red-500 peer-checked:bg-red-50 peer-checked:text-red-700 font-semibold text-sm transition">Stock OUT (-)</div>
               </label>
             </div>
+          </div>
+
+          <div>
+            <label id="partyLabel" class="text-xs font-semibold text-slate-500">Supplier Name (Bought From)</label>
+            <input id="itemParty" type="text" placeholder="e.g. ABC Suppliers Ltd."
+              class="w-full mt-1 px-3 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 outline-none text-sm">
           </div>
 
           <div class="grid grid-cols-2 gap-2">
@@ -164,14 +182,14 @@
                 class="w-full mt-1 px-3 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 outline-none text-sm">
             </div>
             <div>
-              <label class="text-xs font-semibold text-slate-500">Unit Price ($)</label>
+              <label class="text-xs font-semibold text-slate-500">Unit Price (₹)</label>
               <input id="itemUnitPrice" type="number" step="0.01" min="0" value="0.00" required oninput="calculateTotal()"
                 class="w-full mt-1 px-3 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 outline-none text-sm">
             </div>
           </div>
 
           <div>
-            <label class="text-xs font-semibold text-slate-500">Total Price ($) (Auto)</label>
+            <label class="text-xs font-semibold text-slate-500">Total Price (₹) (Auto)</label>
             <input id="itemTotalPrice" type="text" readonly value="0.00"
               class="w-full mt-1 px-3 py-2 bg-slate-100 border border-slate-300 rounded-lg font-bold text-slate-700 outline-none text-sm">
           </div>
@@ -234,6 +252,7 @@
                 <th class="py-2 pr-2">Date</th>
                 <th class="py-2 pr-2">Item</th>
                 <th class="py-2 pr-2">Type</th>
+                <th class="py-2 pr-2">Supplier / Customer</th>
                 <th class="py-2 pr-2">Qty</th>
                 <th class="py-2 pr-2">Unit Price</th>
                 <th class="py-2 pr-2">Total Amount</th>
@@ -308,15 +327,30 @@ auth.onAuthStateChanged((user) => {
 });
 
 /* ============ STORAGE KEYS ============ */
-const INV_KEY = "sk_inventory_v2";
-const TXN_KEY = "sk_transactions_v2";
-const PIN_KEY = "sk_app_pin_v2";
+const INV_KEY = "sk_inventory_v3";
+const TXN_KEY = "sk_transactions_v3";
+const PIN_KEY = "sk_app_pin_v3";
 const LOW_STOCK_THRESHOLD = 5;
 
 /* ============ STATE ============ */
 let inventory = [];
 let transactions = [];
 let appPin = "1234"; // Default PIN
+
+/* ============ FORM UI HELPERS ============ */
+function updatePartyLabel() {
+  const type = document.querySelector('input[name="txnType"]:checked').value;
+  const partyLabel = document.getElementById("partyLabel");
+  const partyInput = document.getElementById("itemParty");
+
+  if (type === "IN") {
+    partyLabel.textContent = "Supplier Name (Bought From)";
+    partyInput.placeholder = "e.g. ABC Suppliers Ltd.";
+  } else {
+    partyLabel.textContent = "Customer Name (Sold To)";
+    partyInput.placeholder = "e.g. Rahul Sharma";
+  }
+}
 
 /* ============ SECURITY PIN CHECK ============ */
 function verifyPin(actionName = "perform this action") {
@@ -410,25 +444,51 @@ function renderMetrics() {
   document.getElementById("metricTotalItems").textContent = totalItems;
   document.getElementById("metricLowStock").textContent = lowStock;
   document.getElementById("metricTotalUnits").textContent = totalUnits;
-  document.getElementById("metricTotalValue").textContent = `$${totalVal.toFixed(2)}`;
+  document.getElementById("metricTotalValue").textContent = `₹${totalVal.toFixed(2)}`;
 }
 
 /* ============ RENDER: REPORTS ============ */
-function renderReports() {
+function toggleCustomDateInputs() {
+  const range = document.getElementById("reportRangeSelect").value;
+  const container = document.getElementById("customDateRangeContainer");
+  if (range === "custom") {
+    container.classList.remove("hidden");
+  } else {
+    container.classList.add("hidden");
+  }
+}
+
+function getFilteredReportTransactions() {
   const range = document.getElementById("reportRangeSelect").value;
   const now = new Date();
   
-  let startDate = new Date(0); // Default all time
-  
+  let startDate = new Date(0);
+  let endDate = new Date();
+
   if (range === "month") {
     startDate = new Date(now.getFullYear(), now.getMonth(), 1);
   } else if (range === "6months") {
     startDate = new Date(now.getFullYear(), now.getMonth() - 6, now.getDate());
   } else if (range === "12months") {
     startDate = new Date(now.getFullYear(), now.getMonth() - 12, now.getDate());
+  } else if (range === "custom") {
+    const sVal = document.getElementById("reportStartDate").value;
+    const eVal = document.getElementById("reportEndDate").value;
+    if (sVal) startDate = new Date(sVal);
+    if (eVal) {
+      endDate = new Date(eVal);
+      endDate.setHours(23, 59, 59, 999);
+    }
   }
 
-  const filteredTxns = transactions.filter(t => new Date(t.date) >= startDate);
+  return transactions.filter(t => {
+    const tDate = new Date(t.date);
+    return tDate >= startDate && tDate <= endDate;
+  });
+}
+
+function renderReports() {
+  const filteredTxns = getFilteredReportTransactions();
 
   let spent = 0;
   let outVal = 0;
@@ -446,15 +506,44 @@ function renderReports() {
     }
   });
 
-  document.getElementById("reportSpent").textContent = `$${spent.toFixed(2)}`;
+  document.getElementById("reportSpent").textContent = `₹${spent.toFixed(2)}`;
   document.getElementById("reportUnitsIn").textContent = `${unitsIn} units added`;
 
-  document.getElementById("reportOutValue").textContent = `$${outVal.toFixed(2)}`;
+  document.getElementById("reportOutValue").textContent = `₹${outVal.toFixed(2)}`;
   document.getElementById("reportUnitsOut").textContent = `${unitsOut} units removed`;
 
   const net = spent - outVal;
-  document.getElementById("reportNetValue").textContent = `$${net.toFixed(2)}`;
+  document.getElementById("reportNetValue").textContent = `₹${net.toFixed(2)}`;
   document.getElementById("reportTxnCount").textContent = `${filteredTxns.length} transactions logged`;
+}
+
+function downloadPeriodReportCSV() {
+  const filteredTxns = getFilteredReportTransactions();
+  if (filteredTxns.length === 0) {
+    showToast("No transactions found for the selected period.", "info");
+    return;
+  }
+
+  const rows = [["Date", "Item Code", "Item Name", "Type", "Supplier / Customer", "Quantity", "Unit Price (INR)", "Total Amount (INR)", "Notes"]];
+  
+  [...filteredTxns].sort((a, b) => new Date(b.date) - new Date(a.date)).forEach(t => {
+    const uPrice = t.unitPrice ? parseFloat(t.unitPrice) : 0;
+    rows.push([
+      formatDate(t.date),
+      t.code,
+      t.name,
+      t.type,
+      t.party || "-",
+      t.qty,
+      uPrice.toFixed(2),
+      (t.qty * uPrice).toFixed(2),
+      t.notes || ""
+    ]);
+  });
+
+  const range = document.getElementById("reportRangeSelect").value;
+  downloadCSV(`period_report_${range}_${dateStamp()}.csv`, rows);
+  showToast("Period report CSV downloaded successfully.", "success");
 }
 
 /* ============ RENDER: INVENTORY TABLE ============ */
@@ -489,8 +578,8 @@ function renderInventory(filter = "") {
       <td class="py-2 pr-2 font-mono text-xs text-slate-500">${escapeHtml(item.code)}</td>
       <td class="py-2 pr-2 font-medium">${escapeHtml(item.name)}</td>
       <td class="py-2 pr-2 font-semibold">${item.qty}</td>
-      <td class="py-2 pr-2 text-slate-600">$${avgPrice.toFixed(2)}</td>
-      <td class="py-2 pr-2 font-semibold text-slate-700">$${itemTotalVal.toFixed(2)}</td>
+      <td class="py-2 pr-2 text-slate-600">₹${avgPrice.toFixed(2)}</td>
+      <td class="py-2 pr-2 font-semibold text-slate-700">₹${itemTotalVal.toFixed(2)}</td>
       <td class="py-2 pr-2">${badge}</td>
       <td class="py-2 pr-2">
         <button onclick="deleteItem('${escapeHtml(item.code)}')" class="text-xs text-red-500 hover:text-red-700 font-medium">Delete</button>
@@ -528,9 +617,10 @@ function renderTransactions() {
       <td class="py-2 pr-2 text-xs text-slate-500 whitespace-nowrap">${formatDate(txn.date)}</td>
       <td class="py-2 pr-2 font-medium">${escapeHtml(txn.name)}</td>
       <td class="py-2 pr-2">${badge}</td>
+      <td class="py-2 pr-2 text-slate-700 font-medium">${escapeHtml(txn.party || "-")}</td>
       <td class="py-2 pr-2 font-semibold">${qtyDisplay}</td>
-      <td class="py-2 pr-2 text-slate-600">$${unitP.toFixed(2)}</td>
-      <td class="py-2 pr-2 font-semibold text-slate-700">$${totalP.toFixed(2)}</td>
+      <td class="py-2 pr-2 text-slate-600">₹${unitP.toFixed(2)}</td>
+      <td class="py-2 pr-2 font-semibold text-slate-700">₹${totalP.toFixed(2)}</td>
       <td class="py-2 pr-2 text-slate-500">${escapeHtml(txn.notes || "-")}</td>
     `;
     tbody.appendChild(row);
@@ -545,13 +635,14 @@ function renderAll() {
   renderTransactions();
 }
 
-/* ============ FORM SUBMIT (PASSWORD PROTECTED) ============ */
+/* ============ FORM SUBMIT ============ */
 document.getElementById("stockForm").addEventListener("submit", function (e) {
   e.preventDefault();
 
   const code = document.getElementById("itemCode").value.trim();
   const name = document.getElementById("itemName").value.trim();
   const type = document.querySelector('input[name="txnType"]:checked').value;
+  const party = document.getElementById("itemParty").value.trim();
   const dateVal = document.getElementById("itemDate").value;
   const qty = parseInt(document.getElementById("itemQty").value, 10);
   const unitPrice = parseFloat(document.getElementById("itemUnitPrice").value) || 0;
@@ -570,7 +661,7 @@ document.getElementById("stockForm").addEventListener("submit", function (e) {
     return;
   }
 
-  // Security Check
+  // Security Verification
   if (!verifyPin(type === "IN" ? "add stock" : "remove stock")) return;
 
   let item = inventory.find(i => i.code.toLowerCase() === code.toLowerCase());
@@ -600,6 +691,7 @@ document.getElementById("stockForm").addEventListener("submit", function (e) {
     code: item.code,
     name: item.name,
     type,
+    party,
     qty,
     unitPrice,
     notes
@@ -615,6 +707,7 @@ document.getElementById("stockForm").addEventListener("submit", function (e) {
   calculateTotal();
   setTodayDate();
   document.querySelector('input[name="txnType"][value="IN"]').checked = true;
+  updatePartyLabel();
   document.getElementById("itemCode").focus();
 });
 
@@ -701,7 +794,7 @@ function downloadCSV(filename, rows) {
 }
 
 function exportInventoryCSV() {
-  const rows = [["Item Code", "Item Name", "Quantity", "Avg Price/Unit", "Total Value", "Status"]];
+  const rows = [["Item Code", "Item Name", "Quantity", "Avg Price/Unit (INR)", "Total Value (INR)", "Status"]];
   inventory.forEach(i => {
     const avgP = getDerivedAvgUnitPrice(i.code);
     rows.push([i.code, i.name, i.qty, avgP.toFixed(2), (i.qty * avgP).toFixed(2), i.qty < LOW_STOCK_THRESHOLD ? "Low Stock" : "In Stock"]);
@@ -711,10 +804,10 @@ function exportInventoryCSV() {
 }
 
 function exportTransactionsCSV() {
-  const rows = [["Date", "Item Code", "Item Name", "Type", "Quantity", "Unit Price", "Total Amount", "Notes"]];
+  const rows = [["Date", "Item Code", "Item Name", "Type", "Supplier / Customer", "Quantity", "Unit Price (INR)", "Total Amount (INR)", "Notes"]];
   [...transactions].sort((a, b) => new Date(b.date) - new Date(a.date)).forEach(t => {
     const uPrice = t.unitPrice ? parseFloat(t.unitPrice) : 0;
-    rows.push([formatDate(t.date), t.code, t.name, t.type, t.qty, uPrice.toFixed(2), (t.qty * uPrice).toFixed(2), t.notes || ""]);
+    rows.push([formatDate(t.date), t.code, t.name, t.type, t.party || "-", t.qty, uPrice.toFixed(2), (t.qty * uPrice).toFixed(2), t.notes || ""]);
   });
   downloadCSV(`transactions_export_${dateStamp()}.csv`, rows);
   showToast("Transaction log exported to CSV.", "success");
@@ -806,12 +899,15 @@ function setTodayDate() {
   const mm = String(today.getMonth() + 1).padStart(2, "0");
   const dd = String(today.getDate()).padStart(2, "0");
   document.getElementById("itemDate").value = `${yyyy}-${mm}-${dd}`;
+  document.getElementById("reportStartDate").value = `${yyyy}-${mm}-01`;
+  document.getElementById("reportEndDate").value = `${yyyy}-${mm}-${dd}`;
 }
 
 /* ============ BOOTSTRAP ============ */
 loadData();
 setTodayDate();
 calculateTotal();
+updatePartyLabel();
 renderAll();
 </script>
 
