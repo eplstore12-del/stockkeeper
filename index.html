@@ -39,6 +39,7 @@
       <!-- Auth Slot -->
       <div id="authButtonContainer"></div>
 
+      <button onclick="changeAppPin()" class="text-sm bg-slate-100 text-slate-700 border border-slate-300 hover:bg-slate-200 px-3 py-2 rounded-lg font-medium transition">🔑 Change PIN</button>
       <button onclick="exportInventoryCSV()" class="text-sm bg-emerald-50 text-emerald-700 border border-emerald-200 hover:bg-emerald-100 px-3 py-2 rounded-lg font-medium transition">⬇ Export Inventory CSV</button>
       <button onclick="exportTransactionsCSV()" class="text-sm bg-emerald-50 text-emerald-700 border border-emerald-200 hover:bg-emerald-100 px-3 py-2 rounded-lg font-medium transition">⬇ Export Logs CSV</button>
       <button onclick="backupJSON()" class="text-sm bg-indigo-50 text-indigo-700 border border-indigo-200 hover:bg-indigo-100 px-3 py-2 rounded-lg font-medium transition">💾 Backup</button>
@@ -54,7 +55,7 @@
 <main id="mainAppContent" class="max-w-7xl mx-auto px-4 py-6 space-y-6 hidden">
 
   <!-- METRICS -->
-  <div class="grid grid-cols-1 sm:grid-cols-3 gap-4">
+  <div class="grid grid-cols-1 sm:grid-cols-4 gap-4">
     <div class="bg-white rounded-xl shadow-sm border border-slate-200 p-4 flex items-center justify-between">
       <div>
         <p class="text-xs text-slate-500 font-medium">Total Items</p>
@@ -75,6 +76,50 @@
         <p id="metricTotalUnits" class="text-2xl font-bold text-emerald-600">0</p>
       </div>
       <div class="w-10 h-10 rounded-lg bg-emerald-50 flex items-center justify-center text-xl">📊</div>
+    </div>
+    <div class="bg-white rounded-xl shadow-sm border border-slate-200 p-4 flex items-center justify-between">
+      <div>
+        <p class="text-xs text-slate-500 font-medium">Total Inventory Value</p>
+        <p id="metricTotalValue" class="text-2xl font-bold text-indigo-600">$0.00</p>
+      </div>
+      <div class="w-10 h-10 rounded-lg bg-indigo-50 flex items-center justify-center text-xl">💰</div>
+    </div>
+  </div>
+
+  <!-- REPORT FILTER & SUMMARY SECTION -->
+  <div class="bg-white rounded-xl shadow-sm border border-slate-200 p-5">
+    <div class="flex flex-wrap items-center justify-between gap-3 mb-4 border-b border-slate-100 pb-3">
+      <div>
+        <h2 class="font-bold text-slate-800 flex items-center gap-2">📈 Period Analytics & Financial Report</h2>
+        <p class="text-xs text-slate-500">Summary of stock inflows and outflows based on selected duration</p>
+      </div>
+      <div class="flex items-center gap-2">
+        <label class="text-xs font-semibold text-slate-500">Select Period:</label>
+        <select id="reportRangeSelect" onchange="renderReports()" class="border border-slate-300 rounded-lg text-sm px-3 py-1.5 focus:ring-2 focus:ring-indigo-500 outline-none">
+          <option value="month">This Month</option>
+          <option value="6months">Last 6 Months</option>
+          <option value="12months" selected>Last 12 Months</option>
+          <option value="all">All Time</option>
+        </select>
+      </div>
+    </div>
+    
+    <div class="grid grid-cols-1 sm:grid-cols-3 gap-4">
+      <div class="bg-slate-50 p-4 rounded-lg border border-slate-200">
+        <p class="text-xs font-medium text-slate-500">Total Purchase Spent (Stock IN)</p>
+        <p id="reportSpent" class="text-xl font-bold text-emerald-700 mt-1">$0.00</p>
+        <p id="reportUnitsIn" class="text-xs text-slate-400 mt-1">0 units added</p>
+      </div>
+      <div class="bg-slate-50 p-4 rounded-lg border border-slate-200">
+        <p class="text-xs font-medium text-slate-500">Total Stock Value Removed (Stock OUT)</p>
+        <p id="reportOutValue" class="text-xl font-bold text-red-600 mt-1">$0.00</p>
+        <p id="reportUnitsOut" class="text-xs text-slate-400 mt-1">0 units removed</p>
+      </div>
+      <div class="bg-slate-50 p-4 rounded-lg border border-slate-200">
+        <p class="text-xs font-medium text-slate-500">Net Movement Value</p>
+        <p id="reportNetValue" class="text-xl font-bold text-indigo-600 mt-1">$0.00</p>
+        <p id="reportTxnCount" class="text-xs text-slate-400 mt-1">0 transactions logged</p>
+      </div>
     </div>
   </div>
 
@@ -114,15 +159,27 @@
 
           <div class="grid grid-cols-2 gap-2">
             <div>
-              <label class="text-xs font-semibold text-slate-500">Date</label>
-              <input id="itemDate" type="date" required
+              <label class="text-xs font-semibold text-slate-500">Quantity</label>
+              <input id="itemQty" type="number" min="1" value="1" required oninput="calculateTotal()"
                 class="w-full mt-1 px-3 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 outline-none text-sm">
             </div>
             <div>
-              <label class="text-xs font-semibold text-slate-500">Quantity</label>
-              <input id="itemQty" type="number" min="1" value="1" required
+              <label class="text-xs font-semibold text-slate-500">Unit Price ($)</label>
+              <input id="itemUnitPrice" type="number" step="0.01" min="0" value="0.00" required oninput="calculateTotal()"
                 class="w-full mt-1 px-3 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 outline-none text-sm">
             </div>
+          </div>
+
+          <div>
+            <label class="text-xs font-semibold text-slate-500">Total Price ($) (Auto)</label>
+            <input id="itemTotalPrice" type="text" readonly value="0.00"
+              class="w-full mt-1 px-3 py-2 bg-slate-100 border border-slate-300 rounded-lg font-bold text-slate-700 outline-none text-sm">
+          </div>
+
+          <div>
+            <label class="text-xs font-semibold text-slate-500">Date</label>
+            <input id="itemDate" type="date" required
+              class="w-full mt-1 px-3 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 outline-none text-sm">
           </div>
 
           <div>
@@ -132,7 +189,7 @@
           </div>
 
           <button type="submit" class="w-full bg-indigo-600 hover:bg-indigo-700 text-white font-semibold py-2.5 rounded-lg transition text-sm">
-            Submit Transaction
+            🔒 Submit Transaction
           </button>
         </form>
       </div>
@@ -155,6 +212,8 @@
                 <th class="py-2 pr-2">Code</th>
                 <th class="py-2 pr-2">Item Name</th>
                 <th class="py-2 pr-2">Qty</th>
+                <th class="py-2 pr-2">Avg Price/Unit</th>
+                <th class="py-2 pr-2">Total Value</th>
                 <th class="py-2 pr-2">Status</th>
                 <th class="py-2 pr-2">Action</th>
               </tr>
@@ -176,6 +235,8 @@
                 <th class="py-2 pr-2">Item</th>
                 <th class="py-2 pr-2">Type</th>
                 <th class="py-2 pr-2">Qty</th>
+                <th class="py-2 pr-2">Unit Price</th>
+                <th class="py-2 pr-2">Total Amount</th>
                 <th class="py-2 pr-2">Notes</th>
               </tr>
             </thead>
@@ -247,18 +308,47 @@ auth.onAuthStateChanged((user) => {
 });
 
 /* ============ STORAGE KEYS ============ */
-const INV_KEY = "sk_inventory_v1";
-const TXN_KEY = "sk_transactions_v1";
+const INV_KEY = "sk_inventory_v2";
+const TXN_KEY = "sk_transactions_v2";
+const PIN_KEY = "sk_app_pin_v2";
 const LOW_STOCK_THRESHOLD = 5;
 
 /* ============ STATE ============ */
 let inventory = [];
 let transactions = [];
+let appPin = "1234"; // Default PIN
 
-/* ============ INIT ============ */
+/* ============ SECURITY PIN CHECK ============ */
+function verifyPin(actionName = "perform this action") {
+  const enteredPin = prompt(`🔒 Security Verification:\nPlease enter PIN to ${actionName}:`);
+  if (enteredPin === null) return false;
+  if (enteredPin === appPin) {
+    return true;
+  } else {
+    showToast("Incorrect PIN! Access denied.", "error");
+    return false;
+  }
+}
+
+function changeAppPin() {
+  if (!verifyPin("change security PIN")) return;
+  const newPin = prompt("Enter new 4-digit PIN:");
+  if (newPin && newPin.trim().length >= 4) {
+    appPin = newPin.trim();
+    localStorage.setItem(PIN_KEY, appPin);
+    showToast("Security PIN updated successfully.", "success");
+  } else {
+    showToast("PIN must be at least 4 digits.", "error");
+  }
+}
+
+/* ============ INIT DATA ============ */
 function loadData() {
   const invRaw = localStorage.getItem(INV_KEY);
   const txnRaw = localStorage.getItem(TXN_KEY);
+  const pinRaw = localStorage.getItem(PIN_KEY);
+
+  if (pinRaw) appPin = pinRaw;
 
   if (invRaw && txnRaw) {
     inventory = JSON.parse(invRaw);
@@ -290,15 +380,81 @@ function showToast(message, type = "success") {
   setTimeout(() => toast.remove(), 3000);
 }
 
+/* ============ PRICE CALCULATIONS ============ */
+function calculateTotal() {
+  const qty = parseFloat(document.getElementById("itemQty").value) || 0;
+  const unitPrice = parseFloat(document.getElementById("itemUnitPrice").value) || 0;
+  document.getElementById("itemTotalPrice").value = (qty * unitPrice).toFixed(2);
+}
+
+// Derive average cost per unit for an item based on Stock IN history
+function getDerivedAvgUnitPrice(code) {
+  const inTxns = transactions.filter(t => t.code.toLowerCase() === code.toLowerCase() && t.type === "IN");
+  if (inTxns.length === 0) return 0;
+  const totalQty = inTxns.reduce((sum, t) => sum + (t.qty || 0), 0);
+  const totalSpent = inTxns.reduce((sum, t) => sum + ((t.qty || 0) * (t.unitPrice || 0)), 0);
+  return totalQty > 0 ? totalSpent / totalQty : 0;
+}
+
 /* ============ RENDER: METRICS ============ */
 function renderMetrics() {
   const totalItems = inventory.length;
   const lowStock = inventory.filter(i => i.qty < LOW_STOCK_THRESHOLD).length;
   const totalUnits = inventory.reduce((sum, i) => sum + i.qty, 0);
+  
+  const totalVal = inventory.reduce((sum, i) => {
+    const avgPrice = getDerivedAvgUnitPrice(i.code);
+    return sum + (i.qty * avgPrice);
+  }, 0);
 
   document.getElementById("metricTotalItems").textContent = totalItems;
   document.getElementById("metricLowStock").textContent = lowStock;
   document.getElementById("metricTotalUnits").textContent = totalUnits;
+  document.getElementById("metricTotalValue").textContent = `$${totalVal.toFixed(2)}`;
+}
+
+/* ============ RENDER: REPORTS ============ */
+function renderReports() {
+  const range = document.getElementById("reportRangeSelect").value;
+  const now = new Date();
+  
+  let startDate = new Date(0); // Default all time
+  
+  if (range === "month") {
+    startDate = new Date(now.getFullYear(), now.getMonth(), 1);
+  } else if (range === "6months") {
+    startDate = new Date(now.getFullYear(), now.getMonth() - 6, now.getDate());
+  } else if (range === "12months") {
+    startDate = new Date(now.getFullYear(), now.getMonth() - 12, now.getDate());
+  }
+
+  const filteredTxns = transactions.filter(t => new Date(t.date) >= startDate);
+
+  let spent = 0;
+  let outVal = 0;
+  let unitsIn = 0;
+  let unitsOut = 0;
+
+  filteredTxns.forEach(t => {
+    const totalAmt = (t.qty || 0) * (t.unitPrice || 0);
+    if (t.type === "IN") {
+      spent += totalAmt;
+      unitsIn += t.qty;
+    } else {
+      outVal += totalAmt;
+      unitsOut += t.qty;
+    }
+  });
+
+  document.getElementById("reportSpent").textContent = `$${spent.toFixed(2)}`;
+  document.getElementById("reportUnitsIn").textContent = `${unitsIn} units added`;
+
+  document.getElementById("reportOutValue").textContent = `$${outVal.toFixed(2)}`;
+  document.getElementById("reportUnitsOut").textContent = `${unitsOut} units removed`;
+
+  const net = spent - outVal;
+  document.getElementById("reportNetValue").textContent = `$${net.toFixed(2)}`;
+  document.getElementById("reportTxnCount").textContent = `${filteredTxns.length} transactions logged`;
 }
 
 /* ============ RENDER: INVENTORY TABLE ============ */
@@ -324,12 +480,17 @@ function renderInventory(filter = "") {
       ? `<span class="bg-red-100 text-red-700 text-xs font-semibold px-2 py-1 rounded-full">Low Stock</span>`
       : `<span class="bg-emerald-100 text-emerald-700 text-xs font-semibold px-2 py-1 rounded-full">In Stock</span>`;
 
+    const avgPrice = getDerivedAvgUnitPrice(item.code);
+    const itemTotalVal = item.qty * avgPrice;
+
     const row = document.createElement("tr");
     row.className = "border-b border-slate-100 hover:bg-slate-50";
     row.innerHTML = `
       <td class="py-2 pr-2 font-mono text-xs text-slate-500">${escapeHtml(item.code)}</td>
       <td class="py-2 pr-2 font-medium">${escapeHtml(item.name)}</td>
       <td class="py-2 pr-2 font-semibold">${item.qty}</td>
+      <td class="py-2 pr-2 text-slate-600">$${avgPrice.toFixed(2)}</td>
+      <td class="py-2 pr-2 font-semibold text-slate-700">$${itemTotalVal.toFixed(2)}</td>
       <td class="py-2 pr-2">${badge}</td>
       <td class="py-2 pr-2">
         <button onclick="deleteItem('${escapeHtml(item.code)}')" class="text-xs text-red-500 hover:text-red-700 font-medium">Delete</button>
@@ -358,6 +519,8 @@ function renderTransactions() {
       ? `<span class="bg-emerald-100 text-emerald-700 text-xs font-semibold px-2 py-1 rounded-full">IN</span>`
       : `<span class="bg-red-100 text-red-700 text-xs font-semibold px-2 py-1 rounded-full">OUT</span>`;
     const qtyDisplay = txn.type === "IN" ? `+${txn.qty}` : `-${txn.qty}`;
+    const unitP = txn.unitPrice ? parseFloat(txn.unitPrice) : 0;
+    const totalP = (txn.qty || 0) * unitP;
 
     const row = document.createElement("tr");
     row.className = "border-b border-slate-100 hover:bg-slate-50";
@@ -366,6 +529,8 @@ function renderTransactions() {
       <td class="py-2 pr-2 font-medium">${escapeHtml(txn.name)}</td>
       <td class="py-2 pr-2">${badge}</td>
       <td class="py-2 pr-2 font-semibold">${qtyDisplay}</td>
+      <td class="py-2 pr-2 text-slate-600">$${unitP.toFixed(2)}</td>
+      <td class="py-2 pr-2 font-semibold text-slate-700">$${totalP.toFixed(2)}</td>
       <td class="py-2 pr-2 text-slate-500">${escapeHtml(txn.notes || "-")}</td>
     `;
     tbody.appendChild(row);
@@ -375,11 +540,12 @@ function renderTransactions() {
 /* ============ RENDER ALL ============ */
 function renderAll() {
   renderMetrics();
+  renderReports();
   renderInventory(document.getElementById("searchInventory").value);
   renderTransactions();
 }
 
-/* ============ FORM SUBMIT ============ */
+/* ============ FORM SUBMIT (PASSWORD PROTECTED) ============ */
 document.getElementById("stockForm").addEventListener("submit", function (e) {
   e.preventDefault();
 
@@ -388,6 +554,7 @@ document.getElementById("stockForm").addEventListener("submit", function (e) {
   const type = document.querySelector('input[name="txnType"]:checked').value;
   const dateVal = document.getElementById("itemDate").value;
   const qty = parseInt(document.getElementById("itemQty").value, 10);
+  const unitPrice = parseFloat(document.getElementById("itemUnitPrice").value) || 0;
   const notes = document.getElementById("itemNotes").value.trim();
 
   if (!code || !name) {
@@ -402,6 +569,9 @@ document.getElementById("stockForm").addEventListener("submit", function (e) {
     showToast("Please select a date.", "error");
     return;
   }
+
+  // Security Check
+  if (!verifyPin(type === "IN" ? "add stock" : "remove stock")) return;
 
   let item = inventory.find(i => i.code.toLowerCase() === code.toLowerCase());
 
@@ -431,6 +601,7 @@ document.getElementById("stockForm").addEventListener("submit", function (e) {
     name: item.name,
     type,
     qty,
+    unitPrice,
     notes
   });
 
@@ -440,6 +611,8 @@ document.getElementById("stockForm").addEventListener("submit", function (e) {
 
   document.getElementById("stockForm").reset();
   document.getElementById("itemQty").value = 1;
+  document.getElementById("itemUnitPrice").value = "0.00";
+  calculateTotal();
   setTodayDate();
   document.querySelector('input[name="txnType"][value="IN"]').checked = true;
   document.getElementById("itemCode").focus();
@@ -469,6 +642,9 @@ codeInput.addEventListener("input", () => {
     div.onclick = () => {
       codeInput.value = m.code;
       nameInput.value = m.name;
+      const lastPrice = getDerivedAvgUnitPrice(m.code);
+      document.getElementById("itemUnitPrice").value = lastPrice.toFixed(2);
+      calculateTotal();
       suggestionsBox.classList.add("hidden");
     };
     suggestionsBox.appendChild(div);
@@ -479,7 +655,12 @@ codeInput.addEventListener("input", () => {
 codeInput.addEventListener("blur", () => {
   setTimeout(() => suggestionsBox.classList.add("hidden"), 150);
   const exact = inventory.find(i => i.code.toLowerCase() === codeInput.value.trim().toLowerCase());
-  if (exact) nameInput.value = exact.name;
+  if (exact) {
+    nameInput.value = exact.name;
+    const lastPrice = getDerivedAvgUnitPrice(exact.code);
+    document.getElementById("itemUnitPrice").value = lastPrice.toFixed(2);
+    calculateTotal();
+  }
 });
 
 document.addEventListener("click", (e) => {
@@ -493,8 +674,9 @@ document.getElementById("searchInventory").addEventListener("input", (e) => {
   renderInventory(e.target.value);
 });
 
-/* ============ DELETE ITEM ============ */
+/* ============ DELETE ITEM (PROTECTED) ============ */
 function deleteItem(code) {
+  if (!verifyPin(`delete item "${code}"`)) return;
   if (!confirm(`Delete item "${code}" from inventory? This does not remove its transaction history.`)) return;
   inventory = inventory.filter(i => i.code !== code);
   saveData();
@@ -519,18 +701,20 @@ function downloadCSV(filename, rows) {
 }
 
 function exportInventoryCSV() {
-  const rows = [["Item Code", "Item Name", "Quantity", "Status"]];
+  const rows = [["Item Code", "Item Name", "Quantity", "Avg Price/Unit", "Total Value", "Status"]];
   inventory.forEach(i => {
-    rows.push([i.code, i.name, i.qty, i.qty < LOW_STOCK_THRESHOLD ? "Low Stock" : "In Stock"]);
+    const avgP = getDerivedAvgUnitPrice(i.code);
+    rows.push([i.code, i.name, i.qty, avgP.toFixed(2), (i.qty * avgP).toFixed(2), i.qty < LOW_STOCK_THRESHOLD ? "Low Stock" : "In Stock"]);
   });
   downloadCSV(`inventory_export_${dateStamp()}.csv`, rows);
   showToast("Inventory exported to CSV.", "success");
 }
 
 function exportTransactionsCSV() {
-  const rows = [["Date", "Item Code", "Item Name", "Type", "Quantity", "Notes"]];
+  const rows = [["Date", "Item Code", "Item Name", "Type", "Quantity", "Unit Price", "Total Amount", "Notes"]];
   [...transactions].sort((a, b) => new Date(b.date) - new Date(a.date)).forEach(t => {
-    rows.push([formatDate(t.date), t.code, t.name, t.type, t.qty, t.notes || ""]);
+    const uPrice = t.unitPrice ? parseFloat(t.unitPrice) : 0;
+    rows.push([formatDate(t.date), t.code, t.name, t.type, t.qty, uPrice.toFixed(2), (t.qty * uPrice).toFixed(2), t.notes || ""]);
   });
   downloadCSV(`transactions_export_${dateStamp()}.csv`, rows);
   showToast("Transaction log exported to CSV.", "success");
@@ -554,6 +738,11 @@ function backupJSON() {
 function restoreJSON(event) {
   const file = event.target.files[0];
   if (!file) return;
+
+  if (!verifyPin("restore backup data")) {
+    event.target.value = "";
+    return;
+  }
 
   const reader = new FileReader();
   reader.onload = function (e) {
@@ -580,6 +769,7 @@ function restoreJSON(event) {
 }
 
 function resetAppData() {
+  if (!verifyPin("reset all application data")) return;
   if (!confirm("This will permanently erase ALL inventory and transaction data. Are you sure?")) return;
   localStorage.removeItem(INV_KEY);
   localStorage.removeItem(TXN_KEY);
@@ -621,6 +811,7 @@ function setTodayDate() {
 /* ============ BOOTSTRAP ============ */
 loadData();
 setTodayDate();
+calculateTotal();
 renderAll();
 </script>
 
