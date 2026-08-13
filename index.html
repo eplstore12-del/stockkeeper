@@ -11,9 +11,10 @@
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
 
-<!-- Firebase SDKs -->
+<!-- Firebase SDKs (v10.8.0 Compat) -->
 <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-app-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-auth-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore-compat.js"></script>
 
 <!-- EmailJS SDK -->
 <script type="text/javascript" src="https://cdn.jsdelivr.net/npm/@emailjs/browser@3/dist/email.min.js"></script>
@@ -65,7 +66,7 @@
       </div>
       <div>
         <h1 class="text-base font-bold text-white tracking-wide leading-tight">StockKeeper</h1>
-        <p class="text-[11px] text-slate-400 font-medium tracking-wider uppercase">Enterprise v4.0</p>
+        <p class="text-[11px] text-slate-400 font-medium tracking-wider uppercase">Cloud v5.0</p>
       </div>
     </div>
 
@@ -91,11 +92,6 @@
         <span class="text-base">💾</span> Backup Database
       </button>
 
-      <label class="w-full text-left flex items-center gap-2.5 px-3 py-2 rounded-lg text-xs font-semibold text-amber-400 hover:bg-amber-500/10 transition cursor-pointer">
-        <span class="text-base">⤴</span> Restore Database
-        <input type="file" id="restoreInput" accept=".json" class="hidden" onchange="restoreJSON(event)">
-      </label>
-
       <button onclick="resetAppData()" class="w-full text-left flex items-center gap-2.5 px-3 py-2 rounded-lg text-xs font-semibold text-rose-400 hover:bg-rose-500/10 transition">
         <span class="text-base">🗑</span> Purge System Data
       </button>
@@ -114,11 +110,11 @@
     <header class="bg-white border-b border-slate-200/80 px-8 py-4 flex items-center justify-between sticky top-0 z-20 shadow-xs">
       <div>
         <h2 class="text-xl font-bold text-slate-900 tracking-tight">Inventory & Operations Dashboard</h2>
-        <p class="text-xs text-slate-500 font-medium">Real-time stock valuation, movements, and warehouse tracking</p>
+        <p class="text-xs text-slate-500 font-medium">Real-time stock valuation, movements, and cloud tracking</p>
       </div>
       <div class="flex items-center gap-3">
-        <span class="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-semibold bg-emerald-50 text-emerald-700 border border-emerald-200/60">
-          <span class="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse"></span> Offline Ready
+        <span id="syncStatus" class="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-semibold bg-emerald-50 text-emerald-700 border border-emerald-200/60">
+          <span class="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse"></span> Firebase Cloud Connected
         </span>
       </div>
     </header>
@@ -330,7 +326,7 @@
               </div>
 
               <button type="submit" class="w-full bg-slate-900 hover:bg-slate-800 text-white font-bold py-3 rounded-xl transition text-xs tracking-wider uppercase shadow-md shadow-slate-900/10">
-                🔒 Authorize & Commit
+                ☁️ Commit to Cloud
               </button>
             </form>
           </div>
@@ -404,7 +400,7 @@
 </div>
 
 <script>
-/* ============ FIREBASE AUTHENTICATION ============ */
+/* ============ FIREBASE INITIALIZATION ============ */
 const firebaseConfig = {
   apiKey: "AIzaSyC7ZCEl4ez4Tt8HPTQqNjLscNs1uVkOVgo",
   authDomain: "stockkeeper-8d4ed.firebaseapp.com",
@@ -417,7 +413,11 @@ const firebaseConfig = {
 
 firebase.initializeApp(firebaseConfig);
 const auth = firebase.auth();
+const db = firebase.firestore();
 const provider = new firebase.auth.GoogleAuthProvider();
+
+let unsubscribeInventory = null;
+let unsubscribeTransactions = null;
 
 function handleGoogleSignIn() {
   auth.signInWithPopup(provider)
@@ -427,7 +427,11 @@ function handleGoogleSignIn() {
 
 function handleSignOut() {
   auth.signOut()
-    .then(() => showToast("Session signed out.", "info"))
+    .then(() => {
+      if (unsubscribeInventory) unsubscribeInventory();
+      if (unsubscribeTransactions) unsubscribeTransactions();
+      showToast("Session signed out.", "info");
+    })
     .catch((error) => showToast(error.message, "error"));
 }
 
@@ -446,6 +450,7 @@ auth.onAuthStateChanged((user) => {
         </div>
       </div>
     `;
+    setupFirestoreListeners(user.uid);
   } else {
     mainContent.classList.add("hidden");
     authBtnContainer.innerHTML = `
@@ -462,11 +467,36 @@ auth.onAuthStateChanged((user) => {
   }
 });
 
-/* ============ STORAGE KEYS ============ */
-const INV_KEY = "sk_inventory_v4";
-const TXN_KEY = "sk_transactions_v4";
-const PIN_KEY = "sk_app_pin_v4";
+/* ============ FIRESTORE REAL-TIME LISTENERS ============ */
+function setupFirestoreListeners(uid) {
+  const pinRaw = localStorage.getItem("sk_app_pin_v4");
+  if (pinRaw) appPin = pinRaw;
+
+  // Real-time Inventory listener
+  unsubscribeInventory = db.collection("users").doc(uid).collection("inventory")
+    .onSnapshot((snapshot) => {
+      inventory = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+      renderAll();
+    }, (error) => {
+      console.error("Firestore inventory error:", error);
+      showToast("Error connecting to inventory database", "error");
+    });
+
+  // Real-time Transactions listener
+  unsubscribeTransactions = db.collection("users").doc(uid).collection("transactions")
+    .onSnapshot((snapshot) => {
+      transactions = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+      renderAll();
+    }, (error) => {
+      console.error("Firestore transactions error:", error);
+    });
+}
+
+/* ============ CONSTANTS & STATE ============ */
 const LOW_STOCK_THRESHOLD = 5;
+let inventory = [];
+let transactions = [];
+let appPin = "1234";
 
 /* ============ EMAILJS ALERT FUNCTION ============ */
 function sendLowStockEmail(itemName, itemCode, currentQty) {
@@ -480,20 +510,13 @@ function sendLowStockEmail(itemName, itemCode, currentQty) {
   };
 
   emailjs.send(serviceID, templateID, templateParams)
-    .then((response) => {
-      console.log("Low stock email sent successfully!", response.status, response.text);
-      showToast(`Low stock alert sent to Gmail for ${itemName}`, "info");
+    .then(() => {
+      showToast(`Low stock alert sent for ${itemName}`, "info");
     })
     .catch((error) => {
       console.error("Failed to send low stock alert email:", error);
-      showToast("Failed to send email alert", "error");
     });
 }
-
-/* ============ STATE ============ */
-let inventory = [];
-let transactions = [];
-let appPin = "1234";
 
 /* ============ FORM UI HELPERS ============ */
 function updatePartyLabel() {
@@ -527,34 +550,11 @@ function changeAppPin() {
   const newPin = prompt("Enter new 4-digit PIN:");
   if (newPin && newPin.trim().length >= 4) {
     appPin = newPin.trim();
-    localStorage.setItem(PIN_KEY, appPin);
+    localStorage.setItem("sk_app_pin_v4", appPin);
     showToast("Security PIN updated successfully.", "success");
   } else {
     showToast("PIN must be at least 4 digits.", "error");
   }
-}
-
-/* ============ INIT DATA ============ */
-function loadData() {
-  const invRaw = localStorage.getItem(INV_KEY);
-  const txnRaw = localStorage.getItem(TXN_KEY);
-  const pinRaw = localStorage.getItem(PIN_KEY);
-
-  if (pinRaw) appPin = pinRaw;
-
-  if (invRaw && txnRaw) {
-    inventory = JSON.parse(invRaw);
-    transactions = JSON.parse(txnRaw);
-  } else {
-    inventory = [];
-    transactions = [];
-    saveData();
-  }
-}
-
-function saveData() {
-  localStorage.setItem(INV_KEY, JSON.stringify(inventory));
-  localStorage.setItem(TXN_KEY, JSON.stringify(transactions));
 }
 
 /* ============ TOASTS ============ */
@@ -595,7 +595,7 @@ function formatLocation(floor, rack, box) {
   return parts.length > 0 ? parts.join(", ") : "N/A";
 }
 
-/* ============ RENDER: METRICS ============ */
+/* ============ RENDER METRICS & REPORTS ============ */
 function renderMetrics() {
   const totalItems = inventory.length;
   const lowStock = inventory.filter(i => i.qty < LOW_STOCK_THRESHOLD).length;
@@ -612,7 +612,6 @@ function renderMetrics() {
   document.getElementById("metricTotalValue").textContent = `₹${totalVal.toFixed(2)}`;
 }
 
-/* ============ RENDER: REPORTS ============ */
 function toggleCustomDateInputs() {
   const range = document.getElementById("reportRangeSelect").value;
   const container = document.getElementById("customDateRangeContainer");
@@ -714,7 +713,7 @@ function downloadPeriodReportCSV() {
   showToast("Period report CSV downloaded successfully.", "success");
 }
 
-/* ============ RENDER: INVENTORY TABLE ============ */
+/* ============ RENDER TABLES ============ */
 function renderInventory(filter = "") {
   const tbody = document.getElementById("inventoryTableBody");
   const emptyMsg = document.getElementById("inventoryEmptyMsg");
@@ -756,14 +755,13 @@ function renderInventory(filter = "") {
       <td class="py-3 px-3 font-bold text-slate-800">₹${itemTotalVal.toFixed(2)}</td>
       <td class="py-3 px-3">${badge}</td>
       <td class="py-3 px-3 text-right">
-        <button onclick="deleteItem('${escapeHtml(item.code)}')" class="text-rose-500 hover:text-rose-700 font-semibold text-[11px] transition">Remove</button>
+        <button onclick="deleteItem('${escapeHtml(item.id || item.code)}')" class="text-rose-500 hover:text-rose-700 font-semibold text-[11px] transition">Remove</button>
       </td>
     `;
     tbody.appendChild(row);
   });
 }
 
-/* ============ RENDER: TRANSACTIONS TABLE ============ */
 function renderTransactions() {
   const tbody = document.getElementById("txnTableBody");
   const emptyMsg = document.getElementById("txnEmptyMsg");
@@ -802,7 +800,6 @@ function renderTransactions() {
   });
 }
 
-/* ============ RENDER ALL ============ */
 function renderAll() {
   renderMetrics();
   renderReports();
@@ -810,9 +807,15 @@ function renderAll() {
   renderTransactions();
 }
 
-/* ============ FORM SUBMIT ============ */
-document.getElementById("stockForm").addEventListener("submit", function (e) {
+/* ============ FORM SUBMIT (SAVING TO FIRESTORE) ============ */
+document.getElementById("stockForm").addEventListener("submit", async function (e) {
   e.preventDefault();
+
+  const user = auth.currentUser;
+  if (!user) {
+    showToast("Please sign in first.", "error");
+    return;
+  }
 
   const code = document.getElementById("itemCode").value.trim();
   const name = document.getElementById("itemName").value.trim();
@@ -841,73 +844,80 @@ document.getElementById("stockForm").addEventListener("submit", function (e) {
     return;
   }
 
-  // Security Verification
   if (!verifyPin(type === "IN" ? "add stock" : "remove stock")) return;
 
-  let item = inventory.find(i => i.code.toLowerCase() === code.toLowerCase());
+  const invRef = db.collection("users").doc(user.uid).collection("inventory");
+  const txnRef = db.collection("users").doc(user.uid).collection("transactions");
 
-  if (type === "OUT") {
-    if (!item || item.qty < qty) {
-      showToast(`Insufficient stock! Available: ${item ? item.qty : 0}, Requested: ${qty}`, "error");
-      return;
-    }
-    item.qty -= qty;
-  } else {
-    if (item) {
-      item.qty += qty;
-      item.name = name;
-      item.floor = floor;
-      item.rack = rack;
-      item.box = box;
-    } else {
-      item = { code, name, qty, floor, rack, box };
-      inventory.push(item);
-    }
-  }
+  try {
+    let item = inventory.find(i => i.code.toLowerCase() === code.toLowerCase());
+    let newQty = qty;
 
-  const now = new Date();
-  const [y, m, d] = dateVal.split("-").map(Number);
-  const combinedDate = new Date(y, m - 1, d, now.getHours(), now.getMinutes(), now.getSeconds());
-
-  transactions.push({
-    date: combinedDate.toISOString(),
-    code: item.code,
-    name: item.name,
-    type,
-    party,
-    floor,
-    rack,
-    box,
-    qty,
-    unitPrice,
-    notes
-  });
-
-  // 1. SAVE DATA FIRST (Guarantees local storage is updated immediately)
-  saveData();
-  renderAll();
-  showToast(type === "IN" ? `Stocked IN ${qty} x ${name}` : `Stocked OUT ${qty} x ${name}`, "success");
-
-  // 2. TRIGGER EMAIL ALERT SAFELY (Wrapped in try/catch so email errors never interrupt saving)
-  if (item.qty <= LOW_STOCK_THRESHOLD) {
-    try {
-      if (typeof emailjs !== 'undefined') {
-        sendLowStockEmail(item.name, item.code, item.qty);
+    if (type === "OUT") {
+      if (!item || item.qty < qty) {
+        showToast(`Insufficient stock! Available: ${item ? item.qty : 0}, Requested: ${qty}`, "error");
+        return;
       }
-    } catch (err) {
-      console.error("EmailJS execution error:", err);
+      newQty = item.qty - qty;
+      await invRef.doc(item.id).update({ qty: newQty });
+    } else {
+      if (item) {
+        newQty = item.qty + qty;
+        await invRef.doc(item.id).update({
+          qty: newQty,
+          name, floor, rack, box
+        });
+      } else {
+        const docRef = await invRef.add({
+          code, name, qty, floor, rack, box
+        });
+        item = { id: docRef.id, code, name, qty: newQty };
+      }
     }
-  }
 
-  // Reset form
-  document.getElementById("stockForm").reset();
-  document.getElementById("itemQty").value = 1;
-  document.getElementById("itemUnitPrice").value = "0.00";
-  calculateTotal();
-  setTodayDate();
-  document.querySelector('input[name="txnType"][value="IN"]').checked = true;
-  updatePartyLabel();
-  document.getElementById("itemCode").focus();
+    const now = new Date();
+    const [y, m, d] = dateVal.split("-").map(Number);
+    const combinedDate = new Date(y, m - 1, d, now.getHours(), now.getMinutes(), now.getSeconds());
+
+    await txnRef.add({
+      date: combinedDate.toISOString(),
+      code,
+      name,
+      type,
+      party,
+      floor,
+      rack,
+      box,
+      qty,
+      unitPrice,
+      notes
+    });
+
+    showToast(type === "IN" ? `Stocked IN ${qty} x ${name}` : `Stocked OUT ${qty} x ${name}`, "success");
+
+    if (newQty <= LOW_STOCK_THRESHOLD) {
+      try {
+        if (typeof emailjs !== 'undefined') {
+          sendLowStockEmail(name, code, newQty);
+        }
+      } catch (err) {
+        console.error("EmailJS error:", err);
+      }
+    }
+
+    document.getElementById("stockForm").reset();
+    document.getElementById("itemQty").value = 1;
+    document.getElementById("itemUnitPrice").value = "0.00";
+    calculateTotal();
+    setTodayDate();
+    document.querySelector('input[name="txnType"][value="IN"]').checked = true;
+    updatePartyLabel();
+    document.getElementById("itemCode").focus();
+
+  } catch (error) {
+    console.error("Cloud save failed:", error);
+    showToast("Failed to save transaction to cloud.", "error");
+  }
 });
 
 /* ============ AUTOCOMPLETE ============ */
@@ -967,22 +977,28 @@ document.addEventListener("click", (e) => {
   }
 });
 
-/* ============ SEARCH ============ */
 document.getElementById("searchInventory").addEventListener("input", (e) => {
   renderInventory(e.target.value);
 });
 
-/* ============ DELETE ITEM ============ */
-function deleteItem(code) {
-  if (!verifyPin(`delete item "${code}"`)) return;
-  if (!confirm(`Delete item "${code}" from inventory? This does not remove its transaction history.`)) return;
-  inventory = inventory.filter(i => i.code !== code);
-  saveData();
-  renderAll();
-  showToast("Item removed from catalog.", "info");
+/* ============ DELETE ITEM FROM FIRESTORE ============ */
+async function deleteItem(docId) {
+  const user = auth.currentUser;
+  if (!user) return;
+
+  if (!verifyPin("delete item")) return;
+  if (!confirm("Delete item from inventory cloud database?")) return;
+
+  try {
+    await db.collection("users").doc(user.uid).collection("inventory").doc(docId).delete();
+    showToast("Item deleted from cloud database.", "info");
+  } catch (error) {
+    console.error("Delete error:", error);
+    showToast("Failed to delete item from cloud.", "error");
+  }
 }
 
-/* ============ CSV EXPORT ============ */
+/* ============ CSV EXPORT & BACKUP ============ */
 function downloadCSV(filename, rows) {
   const csvContent = rows.map(row =>
     row.map(cell => `"${String(cell).replace(/"/g, '""')}"`).join(",")
@@ -1018,7 +1034,6 @@ function exportTransactionsCSV() {
   showToast("Transaction log exported to CSV.", "success");
 }
 
-/* ============ JSON BACKUP / RESTORE ============ */
 function backupJSON() {
   const data = { inventory, transactions, exportedAt: new Date().toISOString() };
   const blob = new Blob([JSON.stringify(data, null, 2)], { type: "application/json" });
@@ -1033,49 +1048,26 @@ function backupJSON() {
   showToast("Database backup downloaded.", "success");
 }
 
-function restoreJSON(event) {
-  const file = event.target.files[0];
-  if (!file) return;
-
-  if (!verifyPin("restore backup data")) {
-    event.target.value = "";
-    return;
-  }
-
-  const reader = new FileReader();
-  reader.onload = function (e) {
-    try {
-      const data = JSON.parse(e.target.result);
-      if (!Array.isArray(data.inventory) || !Array.isArray(data.transactions)) {
-        throw new Error("Invalid file structure");
-      }
-      if (!confirm("This will REPLACE all current data with the backup file. Continue?")) {
-        event.target.value = "";
-        return;
-      }
-      inventory = data.inventory;
-      transactions = data.transactions;
-      saveData();
-      renderAll();
-      showToast("Database restored successfully.", "success");
-    } catch (err) {
-      showToast("Invalid backup file.", "error");
-    }
-    event.target.value = "";
-  };
-  reader.readAsText(file);
-}
-
-function resetAppData() {
+async function resetAppData() {
+  const user = auth.currentUser;
+  if (!user) return;
   if (!verifyPin("reset all application data")) return;
-  if (!confirm("This will permanently erase ALL inventory and transaction data. Are you sure?")) return;
-  localStorage.removeItem(INV_KEY);
-  localStorage.removeItem(TXN_KEY);
-  inventory = [];
-  transactions = [];
-  saveData();
-  renderAll();
-  showToast("System data cleared.", "info");
+  if (!confirm("This will PERMANENTLY ERASE all inventory and transaction records from the cloud. Continue?")) return;
+
+  try {
+    const invSnap = await db.collection("users").doc(user.uid).collection("inventory").get();
+    const txnSnap = await db.collection("users").doc(user.uid).collection("transactions").get();
+
+    const batch = db.batch();
+    invSnap.forEach(doc => batch.delete(doc.ref));
+    txnSnap.forEach(doc => batch.delete(doc.ref));
+
+    await batch.commit();
+    showToast("System cloud database reset.", "info");
+  } catch (error) {
+    console.error("Reset error:", error);
+    showToast("Failed to reset database.", "error");
+  }
 }
 
 /* ============ HELPERS ============ */
@@ -1109,11 +1101,9 @@ function setTodayDate() {
 }
 
 /* ============ BOOTSTRAP ============ */
-loadData();
 setTodayDate();
 calculateTotal();
 updatePartyLabel();
-renderAll();
 </script>
 
 </body>
