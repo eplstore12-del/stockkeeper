@@ -572,7 +572,7 @@ function showToast(message, type = "success") {
   setTimeout(() => toast.remove(), 3000);
 }
 
-/* ============ PRICE CALCULATIONS ============ */
+/* ============ PRICE CALCULATIONS & PRICING ENGINE ============ */
 function calculateTotal() {
   const qty = parseFloat(document.getElementById("itemQty").value) || 0;
   const unitPrice = parseFloat(document.getElementById("itemUnitPrice").value) || 0;
@@ -580,11 +580,21 @@ function calculateTotal() {
 }
 
 function getDerivedAvgUnitPrice(code) {
-  const inTxns = transactions.filter(t => t.code.toLowerCase() === code.toLowerCase() && t.type === "IN");
-  if (inTxns.length === 0) return 0;
-  const totalQty = inTxns.reduce((sum, t) => sum + (t.qty || 0), 0);
-  const totalSpent = inTxns.reduce((sum, t) => sum + ((t.qty || 0) * (t.unitPrice || 0)), 0);
-  return totalQty > 0 ? totalSpent / totalQty : 0;
+  if (!code) return 0;
+  const item = inventory.find(i => i.code && i.code.toLowerCase() === code.toLowerCase());
+  const inTxns = transactions.filter(t => t.code && t.code.toLowerCase() === code.toLowerCase() && t.type === "IN");
+
+  if (inTxns.length > 0) {
+    const totalQty = inTxns.reduce((sum, t) => sum + (Number(t.qty) || 0), 0);
+    const totalSpent = inTxns.reduce((sum, t) => sum + ((Number(t.qty) || 0) * (Number(t.unitPrice) || 0)), 0);
+    if (totalQty > 0 && totalSpent > 0) return totalSpent / totalQty;
+  }
+
+  if (item && item.unitPrice !== undefined && item.unitPrice !== null) {
+    return Number(item.unitPrice) || 0;
+  }
+
+  return 0;
 }
 
 function formatLocation(floor, rack, box) {
@@ -598,12 +608,12 @@ function formatLocation(floor, rack, box) {
 /* ============ RENDER METRICS & REPORTS ============ */
 function renderMetrics() {
   const totalItems = inventory.length;
-  const lowStock = inventory.filter(i => i.qty < LOW_STOCK_THRESHOLD).length;
-  const totalUnits = inventory.reduce((sum, i) => sum + i.qty, 0);
-  
+  const lowStock = inventory.filter(i => (Number(i.qty) || 0) < LOW_STOCK_THRESHOLD).length;
+  const totalUnits = inventory.reduce((sum, i) => sum + (Number(i.qty) || 0), 0);
+
   const totalVal = inventory.reduce((sum, i) => {
     const avgPrice = getDerivedAvgUnitPrice(i.code);
-    return sum + (i.qty * avgPrice);
+    return sum + ((Number(i.qty) || 0) * avgPrice);
   }, 0);
 
   document.getElementById("metricTotalItems").textContent = totalItems;
@@ -660,13 +670,16 @@ function renderReports() {
   let unitsOut = 0;
 
   filteredTxns.forEach(t => {
-    const totalAmt = (t.qty || 0) * (t.unitPrice || 0);
+    const qty = Number(t.qty) || 0;
+    const unitPrice = Number(t.unitPrice) || 0;
+    const totalAmt = qty * unitPrice;
+
     if (t.type === "IN") {
       spent += totalAmt;
-      unitsIn += t.qty;
+      unitsIn += qty;
     } else {
       outVal += totalAmt;
-      unitsOut += t.qty;
+      unitsOut += qty;
     }
   });
 
@@ -691,7 +704,8 @@ function downloadPeriodReportCSV() {
   const rows = [["Date", "Item Code", "Item Name", "Type", "Supplier / Customer", "Floor", "Rack No", "Box No", "Quantity", "Unit Price (INR)", "Total Amount (INR)", "Notes"]];
   
   [...filteredTxns].sort((a, b) => new Date(b.date) - new Date(a.date)).forEach(t => {
-    const uPrice = t.unitPrice ? parseFloat(t.unitPrice) : 0;
+    const uPrice = Number(t.unitPrice) || 0;
+    const qty = Number(t.qty) || 0;
     rows.push([
       formatDate(t.date),
       t.code,
@@ -701,9 +715,9 @@ function downloadPeriodReportCSV() {
       t.floor || "-",
       t.rack || "-",
       t.box || "-",
-      t.qty,
+      qty,
       uPrice.toFixed(2),
-      (t.qty * uPrice).toFixed(2),
+      (qty * uPrice).toFixed(2),
       t.notes || ""
     ]);
   });
@@ -721,12 +735,12 @@ function renderInventory(filter = "") {
 
   const term = filter.toLowerCase();
   const filtered = inventory.filter(i =>
-    i.name.toLowerCase().includes(term) ||
-    i.code.toLowerCase().includes(term) ||
+    (i.name && i.name.toLowerCase().includes(term)) ||
+    (i.code && i.code.toLowerCase().includes(term)) ||
     (i.floor && i.floor.toLowerCase().includes(term)) ||
     (i.rack && i.rack.toLowerCase().includes(term)) ||
     (i.box && i.box.toLowerCase().includes(term))
-  ).sort((a, b) => a.name.localeCompare(b.name));
+  ).sort((a, b) => (a.name || "").localeCompare(b.name || ""));
 
   if (filtered.length === 0) {
     emptyMsg.classList.remove("hidden");
@@ -735,22 +749,23 @@ function renderInventory(filter = "") {
   }
 
   filtered.forEach(item => {
-    const isLow = item.qty < LOW_STOCK_THRESHOLD;
+    const itemQty = Number(item.qty) || 0;
+    const isLow = itemQty < LOW_STOCK_THRESHOLD;
     const badge = isLow
       ? `<span class="inline-flex items-center px-2 py-0.5 rounded-md text-[10px] font-semibold bg-rose-50 text-rose-700 border border-rose-200">Low Stock</span>`
       : `<span class="inline-flex items-center px-2 py-0.5 rounded-md text-[10px] font-semibold bg-emerald-50 text-emerald-700 border border-emerald-200">In Stock</span>`;
 
     const avgPrice = getDerivedAvgUnitPrice(item.code);
-    const itemTotalVal = item.qty * avgPrice;
+    const itemTotalVal = itemQty * avgPrice;
     const locText = formatLocation(item.floor, item.rack, item.box);
 
     const row = document.createElement("tr");
     row.className = "hover:bg-slate-50/80 transition";
     row.innerHTML = `
-      <td class="py-3 px-3 font-mono text-[11px] font-bold text-slate-500">${escapeHtml(item.code)}</td>
-      <td class="py-3 px-3 font-bold text-slate-800">${escapeHtml(item.name)}</td>
+      <td class="py-3 px-3 font-mono text-[11px] font-bold text-slate-500">${escapeHtml(item.code || "")}</td>
+      <td class="py-3 px-3 font-bold text-slate-800">${escapeHtml(item.name || "")}</td>
       <td class="py-3 px-3 text-[11px] font-semibold text-indigo-600 bg-indigo-50/40 rounded-lg">${escapeHtml(locText)}</td>
-      <td class="py-3 px-3 font-bold text-slate-900">${item.qty}</td>
+      <td class="py-3 px-3 font-bold text-slate-900">${itemQty}</td>
       <td class="py-3 px-3 text-slate-500">₹${avgPrice.toFixed(2)}</td>
       <td class="py-3 px-3 font-bold text-slate-800">₹${itemTotalVal.toFixed(2)}</td>
       <td class="py-3 px-3">${badge}</td>
@@ -779,16 +794,17 @@ function renderTransactions() {
     const badge = txn.type === "IN"
       ? `<span class="inline-flex items-center px-2 py-0.5 rounded-md text-[10px] font-bold bg-emerald-100 text-emerald-800">IN</span>`
       : `<span class="inline-flex items-center px-2 py-0.5 rounded-md text-[10px] font-bold bg-rose-100 text-rose-800">OUT</span>`;
-    const qtyDisplay = txn.type === "IN" ? `+${txn.qty}` : `-${txn.qty}`;
-    const unitP = txn.unitPrice ? parseFloat(txn.unitPrice) : 0;
-    const totalP = (txn.qty || 0) * unitP;
+    const qty = Number(txn.qty) || 0;
+    const qtyDisplay = txn.type === "IN" ? `+${qty}` : `-${qty}`;
+    const unitP = Number(txn.unitPrice) || 0;
+    const totalP = qty * unitP;
     const locText = formatLocation(txn.floor, txn.rack, txn.box);
 
     const row = document.createElement("tr");
     row.className = "hover:bg-slate-50/80 transition";
     row.innerHTML = `
       <td class="py-3 px-3 text-[11px] text-slate-400 whitespace-nowrap">${formatDate(txn.date)}</td>
-      <td class="py-3 px-3 font-bold text-slate-800">${escapeHtml(txn.name)}</td>
+      <td class="py-3 px-3 font-bold text-slate-800">${escapeHtml(txn.name || "")}</td>
       <td class="py-3 px-3">${badge}</td>
       <td class="py-3 px-3 text-slate-600 font-medium">${escapeHtml(txn.party || "-")}</td>
       <td class="py-3 px-3 text-[11px] text-slate-500">${escapeHtml(locText)}</td>
@@ -850,28 +866,31 @@ document.getElementById("stockForm").addEventListener("submit", async function (
   const txnRef = db.collection("users").doc(user.uid).collection("transactions");
 
   try {
-    let item = inventory.find(i => i.code.toLowerCase() === code.toLowerCase());
+    let item = inventory.find(i => i.code && i.code.toLowerCase() === code.toLowerCase());
     let newQty = qty;
 
     if (type === "OUT") {
-      if (!item || item.qty < qty) {
-        showToast(`Insufficient stock! Available: ${item ? item.qty : 0}, Requested: ${qty}`, "error");
+      const currentQty = item ? Number(item.qty) || 0 : 0;
+      if (!item || currentQty < qty) {
+        showToast(`Insufficient stock! Available: ${currentQty}, Requested: ${qty}`, "error");
         return;
       }
-      newQty = item.qty - qty;
+      newQty = currentQty - qty;
       await invRef.doc(item.id).update({ qty: newQty });
     } else {
       if (item) {
-        newQty = item.qty + qty;
+        const currentQty = Number(item.qty) || 0;
+        newQty = currentQty + qty;
         await invRef.doc(item.id).update({
           qty: newQty,
-          name, floor, rack, box
+          name, floor, rack, box,
+          unitPrice: unitPrice > 0 ? unitPrice : (Number(item.unitPrice) || 0)
         });
       } else {
         const docRef = await invRef.add({
-          code, name, qty, floor, rack, box
+          code, name, qty, floor, rack, box, unitPrice
         });
-        item = { id: docRef.id, code, name, qty: newQty };
+        item = { id: docRef.id, code, name, qty: newQty, unitPrice };
       }
     }
 
@@ -932,7 +951,7 @@ codeInput.addEventListener("input", () => {
     suggestionsBox.classList.add("hidden");
     return;
   }
-  const matches = inventory.filter(i => i.code.toLowerCase().includes(val) || i.name.toLowerCase().includes(val)).slice(0, 6);
+  const matches = inventory.filter(i => (i.code && i.code.toLowerCase().includes(val)) || (i.name && i.name.toLowerCase().includes(val))).slice(0, 6);
   if (matches.length === 0) {
     suggestionsBox.classList.add("hidden");
     return;
@@ -940,10 +959,10 @@ codeInput.addEventListener("input", () => {
   matches.forEach(m => {
     const div = document.createElement("div");
     div.className = "px-3.5 py-2 hover:bg-slate-50 cursor-pointer text-xs flex justify-between items-center transition border-b border-slate-100 last:border-0";
-    div.innerHTML = `<span class="font-mono text-slate-400 font-bold">${escapeHtml(m.code)}</span><span class="font-semibold text-slate-800">${escapeHtml(m.name)}</span>`;
+    div.innerHTML = `<span class="font-mono text-slate-400 font-bold">${escapeHtml(m.code || "")}</span><span class="font-semibold text-slate-800">${escapeHtml(m.name || "")}</span>`;
     div.onclick = () => {
-      codeInput.value = m.code;
-      nameInput.value = m.name;
+      codeInput.value = m.code || "";
+      nameInput.value = m.name || "";
       if (m.floor) document.getElementById("itemFloor").value = m.floor;
       if (m.rack) document.getElementById("itemRack").value = m.rack;
       if (m.box) document.getElementById("itemBox").value = m.box;
@@ -959,9 +978,9 @@ codeInput.addEventListener("input", () => {
 
 codeInput.addEventListener("blur", () => {
   setTimeout(() => suggestionsBox.classList.add("hidden"), 150);
-  const exact = inventory.find(i => i.code.toLowerCase() === codeInput.value.trim().toLowerCase());
+  const exact = inventory.find(i => i.code && i.code.toLowerCase() === codeInput.value.trim().toLowerCase());
   if (exact) {
-    nameInput.value = exact.name;
+    nameInput.value = exact.name || "";
     if (exact.floor) document.getElementById("itemFloor").value = exact.floor;
     if (exact.rack) document.getElementById("itemRack").value = exact.rack;
     if (exact.box) document.getElementById("itemBox").value = exact.box;
@@ -1018,7 +1037,8 @@ function exportInventoryCSV() {
   const rows = [["Item Code", "Item Name", "Floor", "Rack No", "Box No", "Quantity", "Avg Price/Unit (INR)", "Total Value (INR)", "Status"]];
   inventory.forEach(i => {
     const avgP = getDerivedAvgUnitPrice(i.code);
-    rows.push([i.code, i.name, i.floor || "-", i.rack || "-", i.box || "-", i.qty, avgP.toFixed(2), (i.qty * avgP).toFixed(2), i.qty < LOW_STOCK_THRESHOLD ? "Low Stock" : "In Stock"]);
+    const qty = Number(i.qty) || 0;
+    rows.push([i.code, i.name, i.floor || "-", i.rack || "-", i.box || "-", qty, avgP.toFixed(2), (qty * avgP).toFixed(2), qty < LOW_STOCK_THRESHOLD ? "Low Stock" : "In Stock"]);
   });
   downloadCSV(`inventory_export_${dateStamp()}.csv`, rows);
   showToast("Inventory exported to CSV.", "success");
@@ -1027,8 +1047,9 @@ function exportInventoryCSV() {
 function exportTransactionsCSV() {
   const rows = [["Date", "Item Code", "Item Name", "Type", "Supplier / Customer", "Floor", "Rack No", "Box No", "Quantity", "Unit Price (INR)", "Total Amount (INR)", "Notes"]];
   [...transactions].sort((a, b) => new Date(b.date) - new Date(a.date)).forEach(t => {
-    const uPrice = t.unitPrice ? parseFloat(t.unitPrice) : 0;
-    rows.push([formatDate(t.date), t.code, t.name, t.type, t.party || "-", t.floor || "-", t.rack || "-", t.box || "-", t.qty, uPrice.toFixed(2), (t.qty * uPrice).toFixed(2), t.notes || ""]);
+    const uPrice = Number(t.unitPrice) || 0;
+    const qty = Number(t.qty) || 0;
+    rows.push([formatDate(t.date), t.code, t.name, t.type, t.party || "-", t.floor || "-", t.rack || "-", t.box || "-", qty, uPrice.toFixed(2), (qty * uPrice).toFixed(2), t.notes || ""]);
   });
   downloadCSV(`transactions_export_${dateStamp()}.csv`, rows);
   showToast("Transaction log exported to CSV.", "success");
@@ -1078,6 +1099,7 @@ function escapeHtml(str) {
 }
 
 function formatDate(iso) {
+  if (!iso) return "N/A";
   const d = new Date(iso);
   return d.toLocaleString(undefined, {
     year: "numeric", month: "short", day: "2-digit",
