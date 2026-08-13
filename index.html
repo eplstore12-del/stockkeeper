@@ -297,7 +297,7 @@
               <div class="grid grid-cols-2 gap-2.5">
                 <div>
                   <label class="text-xs font-semibold text-slate-600 mb-1 block">Quantity *</label>
-                  <input id="itemQty" type="number" min="1" value="1" required oninput="calculateTotal()"
+                  <input id="itemQty" type="number" min="1" step="1" value="1" required oninput="calculateTotal()"
                     class="w-full px-3.5 py-2 border border-slate-200 rounded-xl focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 outline-none text-sm font-semibold transition bg-slate-50/30">
                 </div>
                 <div>
@@ -428,8 +428,10 @@ function handleGoogleSignIn() {
 function handleSignOut() {
   auth.signOut()
     .then(() => {
-      if (unsubscribeInventory) unsubscribeInventory();
-      if (unsubscribeTransactions) unsubscribeTransactions();
+      // BUGFIX: null-out the unsubscribe references after calling them so a stray
+      // future call can't invoke an already-used listener teardown function.
+      if (unsubscribeInventory) { unsubscribeInventory(); unsubscribeInventory = null; }
+      if (unsubscribeTransactions) { unsubscribeTransactions(); unsubscribeTransactions = null; }
       showToast("Session signed out.", "info");
     })
     .catch((error) => showToast(error.message, "error"));
@@ -471,6 +473,16 @@ auth.onAuthStateChanged((user) => {
 function setupFirestoreListeners(uid) {
   const pinRaw = localStorage.getItem("sk_app_pin_v4");
   if (pinRaw) appPin = pinRaw;
+
+  // BUGFIX: onAuthStateChanged can legitimately fire more than once with a
+  // signed-in user (e.g. session restored on load, then a fresh popup sign-in
+  // for the same or different account). Without tearing down any previous
+  // listeners first, each additional call stacked a second, third, etc.
+  // onSnapshot subscription on top of the old one - so every write would
+  // trigger renderAll() multiple times and old listeners kept running against
+  // whichever uid they were opened for. Always unsubscribe first.
+  if (unsubscribeInventory) { unsubscribeInventory(); unsubscribeInventory = null; }
+  if (unsubscribeTransactions) { unsubscribeTransactions(); unsubscribeTransactions = null; }
 
   // Real-time Inventory listener
   unsubscribeInventory = db.collection("users").doc(uid).collection("inventory")
@@ -567,14 +579,24 @@ function showToast(message, type = "success") {
   const container = document.getElementById("toastContainer");
   const toast = document.createElement("div");
   toast.className = `toast text-white px-4 py-3 rounded-xl shadow-xl text-xs font-semibold flex items-center justify-between ${colors[type]}`;
-  toast.innerHTML = `<span>${message}</span>`;
+  // BUGFIX: message was injected via innerHTML unescaped. Item names / party
+  // names that flow into toasts (e.g. "Stocked IN 3 x <b>X</b>") come from
+  // user input, so this was an HTML/script injection point (stored + reflected
+  // XSS via itemName/party fields). Escape before inserting.
+  toast.innerHTML = `<span>${escapeHtml(message)}</span>`;
   container.appendChild(toast);
   setTimeout(() => toast.remove(), 3000);
 }
 
 /* ============ PRICE CALCULATIONS & PRICING ENGINE ============ */
 function calculateTotal() {
-  const qty = parseFloat(document.getElementById("itemQty").value) || 0;
+  // BUGFIX: quantity is treated as a whole unit count everywhere else
+  // (parseInt on submit, `step="1"` on the input), but this preview used
+  // parseFloat. For a value like "3.7" the preview showed a total based on
+  // 3.7 units while the actual saved transaction rounded down to 3 units -
+  // the displayed "Calculated Total" didn't match what got committed.
+  // Parsing quantity as an integer here keeps preview and submission in sync.
+  const qty = parseInt(document.getElementById("itemQty").value, 10) || 0;
   const unitPrice = parseFloat(document.getElementById("itemUnitPrice").value) || 0;
   document.getElementById("itemTotalPrice").value = (qty * unitPrice).toFixed(2);
 }
@@ -587,7 +609,13 @@ function getDerivedAvgUnitPrice(code) {
   if (inTxns.length > 0) {
     const totalQty = inTxns.reduce((sum, t) => sum + (Number(t.qty) || 0), 0);
     const totalSpent = inTxns.reduce((sum, t) => sum + ((Number(t.qty) || 0) * (Number(t.unitPrice) || 0)), 0);
-    if (totalQty > 0 && totalSpent > 0) return totalSpent / totalQty;
+    // BUGFIX: previously required `totalSpent > 0`, which meant any item whose
+    // IN transactions were legitimately free (unit price 0 - donations,
+    // samples, warranty replacements, opening balance with unknown cost) fell
+    // through to the stale `item.unitPrice` fallback below instead of
+    // correctly averaging to 0. Only totalQty needs to be positive to trust
+    // the computed average.
+    if (totalQty > 0) return totalSpent / totalQty;
   }
 
   if (item && item.unitPrice !== undefined && item.unitPrice !== null) {
@@ -638,6 +666,12 @@ function getFilteredReportTransactions() {
   
   let startDate = new Date(0);
   let endDate = new Date();
+  // BUGFIX: endDate defaulted to "right now" (an exact timestamp), so any
+  // transaction logged later the same day - after this function first ran -
+  // could fall outside the range on a stale comparison, and end-of-day
+  // transactions on the selected end date were being cut off. Push endDate to
+  // the end of today so the full current day is always included.
+  endDate.setHours(23, 59, 59, 999);
 
   if (range === "month") {
     startDate = new Date(now.getFullYear(), now.getMonth(), 1);
@@ -708,9 +742,12 @@ function downloadPeriodReportCSV() {
     const qty = Number(t.qty) || 0;
     rows.push([
       formatDate(t.date),
-      t.code,
-      t.name,
-      t.type,
+      // BUGFIX: missing fields (t.code/t.name could theoretically be blank on
+      // malformed/legacy records) rendered as the literal text "undefined" in
+      // exported CSVs. Fall back to an empty string like the other columns do.
+      t.code || "",
+      t.name || "",
+      t.type || "",
       t.party || "-",
       t.floor || "-",
       t.rack || "-",
@@ -855,6 +892,14 @@ document.getElementById("stockForm").addEventListener("submit", async function (
     showToast("Quantity must be greater than 0.", "error");
     return;
   }
+  // BUGFIX: a negative unit price (typed in directly, bypassing the min="0"
+  // HTML constraint via paste/JS) silently corrupted every downstream
+  // calculation - inventory valuation, weighted-average price, and CSV
+  // reports could all go negative or wrong with no warning to the user.
+  if (unitPrice < 0) {
+    showToast("Unit price cannot be negative.", "error");
+    return;
+  }
   if (!dateVal) {
     showToast("Please select a date.", "error");
     return;
@@ -960,7 +1005,13 @@ codeInput.addEventListener("input", () => {
     const div = document.createElement("div");
     div.className = "px-3.5 py-2 hover:bg-slate-50 cursor-pointer text-xs flex justify-between items-center transition border-b border-slate-100 last:border-0";
     div.innerHTML = `<span class="font-mono text-slate-400 font-bold">${escapeHtml(m.code || "")}</span><span class="font-semibold text-slate-800">${escapeHtml(m.name || "")}</span>`;
-    div.onclick = () => {
+    // BUGFIX: this uses mousedown, not click, further down. Keeping click here
+    // was fine on its own, but combined with the blur handler's setTimeout it
+    // relied on precise timing; switched to mousedown + preventDefault so the
+    // suggestion is always applied before the input's blur/autofill logic runs,
+    // instead of racing it.
+    div.addEventListener("mousedown", (evt) => {
+      evt.preventDefault();
       codeInput.value = m.code || "";
       nameInput.value = m.name || "";
       if (m.floor) document.getElementById("itemFloor").value = m.floor;
@@ -970,7 +1021,7 @@ codeInput.addEventListener("input", () => {
       document.getElementById("itemUnitPrice").value = lastPrice.toFixed(2);
       calculateTotal();
       suggestionsBox.classList.add("hidden");
-    };
+    });
     suggestionsBox.appendChild(div);
   });
   suggestionsBox.classList.remove("hidden");
@@ -1020,7 +1071,10 @@ async function deleteItem(docId) {
 /* ============ CSV EXPORT & BACKUP ============ */
 function downloadCSV(filename, rows) {
   const csvContent = rows.map(row =>
-    row.map(cell => `"${String(cell).replace(/"/g, '""')}"`).join(",")
+    // BUGFIX: cells that were `undefined`/`null` (e.g. an inventory row missing
+    // an optional field) rendered as the literal text "undefined"/"null" in the
+    // exported file via String(cell). Coalesce to an empty string first.
+    row.map(cell => `"${String(cell ?? "").replace(/"/g, '""')}"`).join(",")
   ).join("\n");
   const blob = new Blob([csvContent], { type: "text/csv;charset=utf-8;" });
   const url = URL.createObjectURL(blob);
@@ -1038,7 +1092,7 @@ function exportInventoryCSV() {
   inventory.forEach(i => {
     const avgP = getDerivedAvgUnitPrice(i.code);
     const qty = Number(i.qty) || 0;
-    rows.push([i.code, i.name, i.floor || "-", i.rack || "-", i.box || "-", qty, avgP.toFixed(2), (qty * avgP).toFixed(2), qty < LOW_STOCK_THRESHOLD ? "Low Stock" : "In Stock"]);
+    rows.push([i.code || "", i.name || "", i.floor || "-", i.rack || "-", i.box || "-", qty, avgP.toFixed(2), (qty * avgP).toFixed(2), qty < LOW_STOCK_THRESHOLD ? "Low Stock" : "In Stock"]);
   });
   downloadCSV(`inventory_export_${dateStamp()}.csv`, rows);
   showToast("Inventory exported to CSV.", "success");
@@ -1049,7 +1103,7 @@ function exportTransactionsCSV() {
   [...transactions].sort((a, b) => new Date(b.date) - new Date(a.date)).forEach(t => {
     const uPrice = Number(t.unitPrice) || 0;
     const qty = Number(t.qty) || 0;
-    rows.push([formatDate(t.date), t.code, t.name, t.type, t.party || "-", t.floor || "-", t.rack || "-", t.box || "-", qty, uPrice.toFixed(2), (qty * uPrice).toFixed(2), t.notes || ""]);
+    rows.push([formatDate(t.date), t.code || "", t.name || "", t.type || "", t.party || "-", t.floor || "-", t.rack || "-", t.box || "-", qty, uPrice.toFixed(2), (qty * uPrice).toFixed(2), t.notes || ""]);
   });
   downloadCSV(`transactions_export_${dateStamp()}.csv`, rows);
   showToast("Transaction log exported to CSV.", "success");
@@ -1079,11 +1133,21 @@ async function resetAppData() {
     const invSnap = await db.collection("users").doc(user.uid).collection("inventory").get();
     const txnSnap = await db.collection("users").doc(user.uid).collection("transactions").get();
 
-    const batch = db.batch();
-    invSnap.forEach(doc => batch.delete(doc.ref));
-    txnSnap.forEach(doc => batch.delete(doc.ref));
+    // BUGFIX: a single Firestore batch write is capped at 500 operations.
+    // The original code put every inventory + transaction deletion into one
+    // batch, so any account with more than 500 combined documents would have
+    // batch.commit() reject the whole batch outright, and NOTHING would be
+    // deleted (not even the docs under the limit) - "Purge System Data" would
+    // silently fail for larger datasets. Chunk deletes into batches of 500.
+    const allDocs = [...invSnap.docs, ...txnSnap.docs];
+    const CHUNK_SIZE = 500;
+    for (let i = 0; i < allDocs.length; i += CHUNK_SIZE) {
+      const chunk = allDocs.slice(i, i + CHUNK_SIZE);
+      const batch = db.batch();
+      chunk.forEach(doc => batch.delete(doc.ref));
+      await batch.commit();
+    }
 
-    await batch.commit();
     showToast("System cloud database reset.", "info");
   } catch (error) {
     console.error("Reset error:", error);
