@@ -421,7 +421,7 @@ async function ensurePin() {
   try {
     await SETTINGS_REF.set({
       pin: appPin,
-      updatedAt: firebase.firestore.FieldValue.serverTimestamp()
+      updatedAt: new Date().toISOString()
     }, { merge: true });
   } catch (error) {
     console.error("PIN cloud save:", error);
@@ -460,7 +460,7 @@ async function changeAppPin() {
   try {
     await SETTINGS_REF.set({
       pin: appPin,
-      updatedAt: firebase.firestore.FieldValue.serverTimestamp()
+      updatedAt: new Date().toISOString()
     }, { merge: true });
 
     showToast("Security PIN updated in cloud.", "success");
@@ -736,7 +736,7 @@ document.getElementById("stockForm").addEventListener("submit", async e => {
 
   const user = auth.currentUser;
   if (!user) {
-    showToast("Please sign in with Google first.", "error");
+    showToast("Please sign in first.", "error");
     return;
   }
 
@@ -765,120 +765,103 @@ document.getElementById("stockForm").addEventListener("submit", async e => {
 
   try {
     const normalizedCode = code.toLowerCase();
-    let newQty = 0;
-    let inventoryId = null;
+    const querySnapshot = await INVENTORY_REF
+      .where("codeLower", "==", normalizedCode)
+      .limit(1)
+      .get();
 
-    /*
-      IMPORTANT FIX:
-      Do NOT use the locally cached inventory array to decide whether
-      a Firestore document exists. The cache can be stale, and that can
-      make transaction.update() fail with "Requested document was not found".
+    const existingDoc = querySnapshot.empty ? null : querySnapshot.docs[0];
+    const existingData = existingDoc ? existingDoc.data() : null;
+    const nowIso = new Date().toISOString();
+    let newQty;
+    let inventoryId;
 
-      Instead, read the current Firestore document INSIDE the transaction.
-    */
-    await db.runTransaction(async transaction => {
-      const query = INVENTORY_REF
-        .where("codeLower", "==", normalizedCode)
-        .limit(1);
+    if (type === "OUT") {
+      if (!existingDoc) throw new Error("ITEM_NOT_FOUND");
 
-      const querySnapshot = await transaction.get(query);
-      const existingDoc = querySnapshot.empty ? null : querySnapshot.docs[0];
-      const existingData = existingDoc ? existingDoc.data() : null;
+      const currentQty = Number(existingData.qty) || 0;
+      if (currentQty < qty) throw new Error(`INSUFFICIENT:${currentQty}`);
 
-      if (type === "OUT") {
-        if (!existingDoc) throw new Error("ITEM_NOT_FOUND");
+      newQty = currentQty - qty;
+      inventoryId = existingDoc.id;
 
-        const currentQty = Number(existingData.qty) || 0;
-        if (currentQty < qty) {
-          throw new Error(`INSUFFICIENT:${currentQty}`);
-        }
+      await existingDoc.ref.update({
+        qty: newQty,
+        updatedAt: nowIso,
+        updatedBy: user.uid
+      });
+    } else if (existingDoc) {
+      const currentQty = Number(existingData.qty) || 0;
+      newQty = currentQty + qty;
+      inventoryId = existingDoc.id;
 
-        newQty = currentQty - qty;
-        inventoryId = existingDoc.id;
-
-        transaction.update(existingDoc.ref, {
-          qty: newQty,
-          updatedAt: firebase.firestore.FieldValue.serverTimestamp(),
-          updatedBy: user.uid
-        });
-      } else {
-        if (existingDoc) {
-          const currentQty = Number(existingData.qty) || 0;
-          newQty = currentQty + qty;
-          inventoryId = existingDoc.id;
-
-          transaction.update(existingDoc.ref, {
-            code,
-            codeLower: normalizedCode,
-            name,
-            qty: newQty,
-            floor,
-            rack,
-            box,
-            unitPrice,
-            updatedAt: firebase.firestore.FieldValue.serverTimestamp(),
-            updatedBy: user.uid
-          });
-        } else {
-          const ref = INVENTORY_REF.doc();
-          inventoryId = ref.id;
-          newQty = qty;
-
-          transaction.set(ref, {
-            code,
-            codeLower: normalizedCode,
-            name,
-            qty,
-            floor,
-            rack,
-            box,
-            unitPrice,
-            createdAt: firebase.firestore.FieldValue.serverTimestamp(),
-            updatedAt: firebase.firestore.FieldValue.serverTimestamp(),
-            createdBy: user.uid,
-            updatedBy: user.uid
-          });
-        }
-      }
-
-      const txnRef = TRANSACTIONS_REF.doc();
-      transaction.set(txnRef, {
-        date: firebase.firestore.Timestamp.fromDate(new Date(`${dateVal}T12:00:00`)),
+      await existingDoc.ref.update({
         code,
         codeLower: normalizedCode,
         name,
-        type,
-        party,
+        qty: newQty,
         floor,
         rack,
         box,
-        qty,
         unitPrice,
-        notes,
-        inventoryId,
-        createdAt: firebase.firestore.FieldValue.serverTimestamp(),
-        createdBy: user.uid,
-        createdByEmail: user.email || ""
+        updatedAt: nowIso,
+        updatedBy: user.uid
       });
+    } else {
+      const safeId = encodeURIComponent(normalizedCode);
+      const ref = INVENTORY_REF.doc(safeId);
+      inventoryId = ref.id;
+      newQty = qty;
+
+      await ref.set({
+        code,
+        codeLower: normalizedCode,
+        name,
+        qty,
+        floor,
+        rack,
+        box,
+        unitPrice,
+        createdAt: nowIso,
+        updatedAt: nowIso,
+        createdBy: user.uid,
+        updatedBy: user.uid
+      });
+    }
+
+    // Store dates/timestamps as plain ISO strings. This avoids the Compat SDK
+    // custom Timestamp/FieldValue type error seen in the deployed page.
+    await TRANSACTIONS_REF.doc().set({
+      date: new Date(`${dateVal}T12:00:00`).toISOString(),
+      code,
+      codeLower: normalizedCode,
+      name,
+      type,
+      party,
+      floor,
+      rack,
+      box,
+      qty,
+      unitPrice,
+      notes,
+      inventoryId,
+      createdAt: nowIso,
+      createdBy: user.uid,
+      createdByEmail: user.email || ""
     });
 
     showToast(
-      type === "IN"
-        ? `Stocked IN ${qty} × ${name}`
-        : `Stocked OUT ${qty} × ${name}`,
+      type === "IN" ? `Stocked IN ${qty} × ${name}` : `Stocked OUT ${qty} × ${name}`,
       "success"
     );
 
     if (newQty <= LOW_STOCK_THRESHOLD && typeof emailjs !== "undefined") {
-      try {
-        sendLowStockEmail(name, code, newQty);
-      } catch (emailError) {
-        console.error("EmailJS error:", emailError);
-      }
+      try { sendLowStockEmail(name, code, newQty); }
+      catch (emailError) { console.error("EmailJS error:", emailError); }
     }
 
     document.getElementById("stockForm").reset();
-    document.getElementById("itemQty").value = 1;
+    document.getElementById("itemQty").value = "1";
     document.getElementById("itemUnitPrice").value = "0.00";
     calculateTotal();
     setTodayDate();
@@ -889,17 +872,17 @@ document.getElementById("stockForm").addEventListener("submit", async e => {
   } catch (error) {
     console.error("Cloud save failed:", error);
 
-    if (error.message === "ITEM_NOT_FOUND") {
-      showToast("This item is not in inventory. Add it with Stock IN first.", "error");
-    } else if (error.message && error.message.startsWith("INSUFFICIENT:")) {
-      const available = error.message.split(":")[1];
-      showToast(`Insufficient stock. Available: ${available}`, "error");
+    if (error && error.message === "ITEM_NOT_FOUND") {
+      showToast("This item does not exist in inventory. Use Stock IN first.", "error");
+    } else if (error && String(error.message).startsWith("INSUFFICIENT:")) {
+      const available = String(error.message).split(":")[1];
+      showToast(`Insufficient stock! Available: ${available}, Requested: ${qty}`, "error");
     } else {
       showToast("Cloud save failed: " + getFirebaseError(error), "error");
     }
   } finally {
     button.disabled = false;
-    button.textContent = "☁️ COMMIT TO CLOUD";
+    button.textContent = "☁️ Commit to Cloud";
   }
 });
 
