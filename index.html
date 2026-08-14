@@ -3,404 +3,270 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>StockKeeper Enterprise - Inventory Management System</title>
-<!-- Tailwind CSS -->
+<title>StockKeeper Pro - Inventory Management System</title>
+
 <script src="https://cdn.tailwindcss.com"></script>
-<!-- Google Fonts -->
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
 
-<!-- Firebase SDKs (v10.8.0 Compat) -->
+<!-- Firebase v10 Compat -->
 <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-app-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-auth-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore-compat.js"></script>
 
-<!-- EmailJS SDK -->
-<script type="text/javascript" src="https://cdn.jsdelivr.net/npm/@emailjs/browser@3/dist/email.min.js"></script>
-<script type="text/javascript">
-  (function(){
-    try {
-      emailjs.init("l51hBXXZZPYhmMBSo");
-    } catch(e) {
-      console.warn("EmailJS initialization skipped or blocked:", e);
-    }
-  })();
+<!-- EmailJS -->
+<script src="https://cdn.jsdelivr.net/npm/@emailjs/browser@3/dist/email.min.js"></script>
+<script>
+(function () {
+  try {
+    emailjs.init("l51hBXXZZPYhmMBSo");
+  } catch (e) {
+    console.warn("EmailJS initialization failed:", e);
+  }
+})();
 </script>
 
 <style>
-  body {
-    font-family: 'Plus Jakarta Sans', sans-serif;
-  }
-  .font-mono {
-    font-family: 'JetBrains Mono', monospace;
-  }
-  ::-webkit-scrollbar { height: 6px; width: 6px; }
-  ::-webkit-scrollbar-track { background: #f1f5f9; }
-  ::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 9999px; }
-  ::-webkit-scrollbar-thumb:hover { background: #94a3b8; }
-  
-  .toast { animation: slideIn 0.3s cubic-bezier(0.16, 1, 0.3, 1), fadeOut 0.3s ease 2.7s forwards; }
-  @keyframes slideIn { from { transform: translateY(-20px) scale(0.95); opacity:0; } to { transform: translateY(0) scale(1); opacity:1; } }
-  @keyframes fadeOut { to { opacity: 0; transform: translateY(-20px) scale(0.95); } }
-  .autocomplete-list { max-height: 220px; overflow-y:auto; }
-  
-  .glass-card {
-    background: rgba(255, 255, 255, 0.95);
-    backdrop-filter: blur(8px);
-  }
+body { font-family: 'Plus Jakarta Sans', sans-serif; }
+.font-mono { font-family: 'JetBrains Mono', monospace; }
+::-webkit-scrollbar { height: 6px; width: 6px; }
+::-webkit-scrollbar-track { background: #f1f5f9; }
+::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 9999px; }
+.toast { animation: slideIn .3s ease, fadeOut .3s ease 2.7s forwards; }
+@keyframes slideIn { from { transform: translateY(-20px) scale(.95); opacity:0 } to { transform:translateY(0) scale(1); opacity:1 } }
+@keyframes fadeOut { to { opacity:0; transform:translateY(-20px) scale(.95) } }
+.autocomplete-list { max-height:220px; overflow-y:auto; }
 </style>
 </head>
-<body class="bg-slate-50 min-h-screen text-slate-800 antialiased selection:bg-indigo-500 selection:text-white">
 
+<body class="bg-slate-50 min-h-screen text-slate-800 antialiased">
 <div id="toastContainer" class="fixed top-5 right-5 z-50 flex flex-col gap-2.5 w-80"></div>
 
 <div class="flex min-h-screen">
-
-  <!-- SIDEBAR NAVIGATION -->
-  <aside class="w-64 bg-slate-900 text-slate-300 flex flex-col shrink-0 border-r border-slate-800">
-    <!-- Brand -->
-    <div class="p-5 border-b border-slate-800 flex items-center gap-3">
-      <div class="bg-gradient-to-tr from-indigo-600 to-violet-500 text-white rounded-xl w-10 h-10 flex items-center justify-center font-extrabold text-xl shadow-lg shadow-indigo-500/30">
-        SK
-      </div>
-      <div>
-        <h1 class="text-base font-bold text-white tracking-wide leading-tight">StockKeeper</h1>
-        <p class="text-[11px] text-slate-400 font-medium tracking-wider uppercase">Cloud v5.0</p>
-      </div>
+<aside class="w-64 bg-slate-900 text-slate-300 flex flex-col shrink-0 border-r border-slate-800">
+  <div class="p-5 border-b border-slate-800 flex items-center gap-3">
+    <div class="bg-gradient-to-tr from-indigo-600 to-violet-500 text-white rounded-xl w-10 h-10 flex items-center justify-center font-extrabold text-xl">SK</div>
+    <div>
+      <h1 class="text-base font-bold text-white">StockKeeper Pro</h1>
+      <p class="text-[11px] text-slate-400 uppercase tracking-wider">Cloud Inventory</p>
     </div>
+  </div>
 
-    <!-- Actions / Utilities -->
-    <div class="p-4 space-y-1.5 flex-1 overflow-y-auto">
-      <div class="text-[10px] font-bold text-slate-500 uppercase tracking-wider px-3 mb-2">Management Controls</div>
-      
-      <button onclick="changeAppPin()" class="w-full text-left flex items-center gap-2.5 px-3 py-2 rounded-lg text-xs font-semibold text-slate-300 hover:bg-slate-800 hover:text-white transition">
-        <span class="text-base">🔑</span> Security PIN
-      </button>
-      
-      <button onclick="exportInventoryCSV()" class="w-full text-left flex items-center gap-2.5 px-3 py-2 rounded-lg text-xs font-semibold text-emerald-400 hover:bg-emerald-500/10 transition">
-        <span class="text-base">📊</span> Export Inventory CSV
-      </button>
+  <div class="p-4 space-y-1.5 flex-1 overflow-y-auto">
+    <div class="text-[10px] font-bold text-slate-500 uppercase tracking-wider px-3 mb-2">Management</div>
 
-      <button onclick="exportTransactionsCSV()" class="w-full text-left flex items-center gap-2.5 px-3 py-2 rounded-lg text-xs font-semibold text-emerald-400 hover:bg-emerald-500/10 transition">
-        <span class="text-base">🧾</span> Export Logs CSV
-      </button>
+    <button onclick="changeAppPin()" class="w-full text-left flex items-center gap-2.5 px-3 py-2 rounded-lg text-xs font-semibold hover:bg-slate-800 hover:text-white">
+      🔑 Security PIN
+    </button>
 
-      <div class="text-[10px] font-bold text-slate-500 uppercase tracking-wider px-3 pt-4 mb-2">Data & Maintenance</div>
+    <button onclick="exportInventoryCSV()" class="w-full text-left flex items-center gap-2.5 px-3 py-2 rounded-lg text-xs font-semibold text-emerald-400 hover:bg-emerald-500/10">
+      📊 Export Inventory CSV
+    </button>
 
-      <button onclick="backupJSON()" class="w-full text-left flex items-center gap-2.5 px-3 py-2 rounded-lg text-xs font-semibold text-slate-300 hover:bg-slate-800 hover:text-white transition">
-        <span class="text-base">💾</span> Backup Database
-      </button>
+    <button onclick="exportTransactionsCSV()" class="w-full text-left flex items-center gap-2.5 px-3 py-2 rounded-lg text-xs font-semibold text-emerald-400 hover:bg-emerald-500/10">
+      🧾 Export Logs CSV
+    </button>
 
-      <button onclick="resetAppData()" class="w-full text-left flex items-center gap-2.5 px-3 py-2 rounded-lg text-xs font-semibold text-rose-400 hover:bg-rose-500/10 transition">
-        <span class="text-base">🗑</span> Purge System Data
-      </button>
-    </div>
+    <div class="text-[10px] font-bold text-slate-500 uppercase tracking-wider px-3 pt-4 mb-2">Data</div>
 
-    <!-- Auth Footnote -->
-    <div class="p-4 border-t border-slate-800 bg-slate-950/50">
-      <div id="authButtonContainer"></div>
-    </div>
-  </aside>
+    <button onclick="backupJSON()" class="w-full text-left flex items-center gap-2.5 px-3 py-2 rounded-lg text-xs font-semibold hover:bg-slate-800 hover:text-white">
+      💾 Backup Database
+    </button>
 
-  <!-- MAIN WORKSPACE -->
-  <div class="flex-1 flex flex-col min-w-0 overflow-hidden">
-    
-    <!-- TOP HEADER -->
-    <header class="bg-white border-b border-slate-200/80 px-8 py-4 flex items-center justify-between sticky top-0 z-20 shadow-xs">
-      <div>
-        <h2 class="text-xl font-bold text-slate-900 tracking-tight">Inventory & Operations Dashboard</h2>
-        <p class="text-xs text-slate-500 font-medium">Real-time stock valuation, movements, and cloud tracking</p>
-      </div>
-      <div class="flex items-center gap-3">
-        <span id="syncStatus" class="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-semibold bg-emerald-50 text-emerald-700 border border-emerald-200/60">
-          <span class="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse"></span> Firebase Cloud Connected
-        </span>
-      </div>
-    </header>
+    <button onclick="resetAppData()" class="w-full text-left flex items-center gap-2.5 px-3 py-2 rounded-lg text-xs font-semibold text-rose-400 hover:bg-rose-500/10">
+      🗑 Purge System Data
+    </button>
+  </div>
 
-    <!-- CONTENT BODY -->
-    <main id="mainAppContent" class="p-8 space-y-8 overflow-y-auto hidden">
+  <div class="p-4 border-t border-slate-800 bg-slate-950/50">
+    <div id="authButtonContainer"></div>
+  </div>
+</aside>
 
-      <!-- KEY METRICS CARDS -->
-      <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-5">
-        <div class="bg-white rounded-xl p-5 border border-slate-200/80 shadow-xs hover:shadow-md transition">
-          <div class="flex items-center justify-between">
-            <span class="text-xs font-semibold uppercase tracking-wider text-slate-500">Total Products</span>
-            <div class="w-9 h-9 rounded-lg bg-indigo-50 text-indigo-600 flex items-center justify-center font-bold">📦</div>
-          </div>
-          <p id="metricTotalItems" class="text-3xl font-bold text-slate-900 mt-3 tracking-tight">0</p>
-          <span class="text-[11px] text-slate-400 font-medium mt-1 block">Active SKUs cataloged</span>
-        </div>
+<div class="flex-1 flex flex-col min-w-0 overflow-hidden">
+<header class="bg-white border-b border-slate-200 px-8 py-4 flex items-center justify-between sticky top-0 z-20">
+  <div>
+    <h2 class="text-xl font-bold text-slate-900">Inventory & Operations Dashboard</h2>
+    <p class="text-xs text-slate-500">Shared real-time cloud inventory</p>
+  </div>
+  <span id="syncStatus" class="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-semibold bg-slate-100 text-slate-600 border">
+    <span class="w-1.5 h-1.5 rounded-full bg-slate-400"></span> Connecting...
+  </span>
+</header>
 
-        <div class="bg-white rounded-xl p-5 border border-slate-200/80 shadow-xs hover:shadow-md transition">
-          <div class="flex items-center justify-between">
-            <span class="text-xs font-semibold uppercase tracking-wider text-slate-500">Stock Alerts</span>
-            <div class="w-9 h-9 rounded-lg bg-rose-50 text-rose-600 flex items-center justify-center font-bold">⚠️</div>
-          </div>
-          <p id="metricLowStock" class="text-3xl font-bold text-rose-600 mt-3 tracking-tight">0</p>
-          <span class="text-[11px] text-rose-500 font-medium mt-1 block">Items at or below threshold (≤5)</span>
-        </div>
+<main id="mainAppContent" class="p-8 space-y-8 overflow-y-auto hidden">
 
-        <div class="bg-white rounded-xl p-5 border border-slate-200/80 shadow-xs hover:shadow-md transition">
-          <div class="flex items-center justify-between">
-            <span class="text-xs font-semibold uppercase tracking-wider text-slate-500">Total Quantity</span>
-            <div class="w-9 h-9 rounded-lg bg-emerald-50 text-emerald-600 flex items-center justify-center font-bold">📊</div>
-          </div>
-          <p id="metricTotalUnits" class="text-3xl font-bold text-emerald-600 mt-3 tracking-tight">0</p>
-          <span class="text-[11px] text-slate-400 font-medium mt-1 block">Units across all floors</span>
-        </div>
-
-        <div class="bg-white rounded-xl p-5 border border-slate-200/80 shadow-xs hover:shadow-md transition">
-          <div class="flex items-center justify-between">
-            <span class="text-xs font-semibold uppercase tracking-wider text-slate-500">Portfolio Valuation</span>
-            <div class="w-9 h-9 rounded-lg bg-violet-50 text-violet-600 flex items-center justify-center font-bold">💰</div>
-          </div>
-          <p id="metricTotalValue" class="text-3xl font-bold text-slate-900 mt-3 tracking-tight">₹0.00</p>
-          <span class="text-[11px] text-slate-400 font-medium mt-1 block">Estimated total asset value</span>
-        </div>
-      </div>
-
-      <!-- PERIOD ANALYTICS BANNER -->
-      <div class="bg-white rounded-2xl border border-slate-200/80 p-6 shadow-xs">
-        <div class="flex flex-wrap items-center justify-between gap-4 pb-5 mb-5 border-b border-slate-100">
-          <div>
-            <h3 class="text-base font-bold text-slate-900 flex items-center gap-2">
-              <span>📈</span> Financial Summary & Movements
-            </h3>
-            <p class="text-xs text-slate-500">Analyze overall cashflow spent on acquisitions vs stock removals</p>
-          </div>
-          
-          <div class="flex flex-wrap items-center gap-2.5">
-            <select id="reportRangeSelect" onchange="toggleCustomDateInputs(); renderReports();" class="border border-slate-200 rounded-xl text-xs font-semibold text-slate-700 bg-slate-50/50 px-3 py-2 focus:ring-2 focus:ring-indigo-500 outline-none">
-              <option value="month">This Month</option>
-              <option value="6months">Last 6 Months</option>
-              <option value="12months" selected>Last 12 Months</option>
-              <option value="all">All Time</option>
-              <option value="custom">Custom Range</option>
-            </select>
-
-            <div id="customDateRangeContainer" class="hidden flex items-center gap-2">
-              <input id="reportStartDate" type="date" onchange="renderReports()" class="border border-slate-200 rounded-xl text-xs px-2.5 py-1.5 focus:ring-2 focus:ring-indigo-500 outline-none">
-              <span class="text-xs font-medium text-slate-400">to</span>
-              <input id="reportEndDate" type="date" onchange="renderReports()" class="border border-slate-200 rounded-xl text-xs px-2.5 py-1.5 focus:ring-2 focus:ring-indigo-500 outline-none">
-            </div>
-
-            <button onclick="downloadPeriodReportCSV()" class="text-xs bg-indigo-600 hover:bg-indigo-700 text-white font-semibold px-4 py-2 rounded-xl transition shadow-xs flex items-center gap-1.5">
-              <span>📥</span> Export Period Report
-            </button>
-          </div>
-        </div>
-
-        <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
-          <div class="bg-slate-50/80 p-4 rounded-xl border border-slate-100">
-            <span class="text-[11px] font-bold uppercase tracking-wider text-slate-400">Total Purchases (Stock IN)</span>
-            <p id="reportSpent" class="text-2xl font-bold text-emerald-600 mt-1">₹0.00</p>
-            <p id="reportUnitsIn" class="text-xs text-slate-500 mt-0.5 font-medium">0 units added</p>
-          </div>
-
-          <div class="bg-slate-50/80 p-4 rounded-xl border border-slate-100">
-            <span class="text-[11px] font-bold uppercase tracking-wider text-slate-400">Outflow Value (Stock OUT)</span>
-            <p id="reportOutValue" class="text-2xl font-bold text-rose-600 mt-1">₹0.00</p>
-            <p id="reportUnitsOut" class="text-xs text-slate-500 mt-0.5 font-medium">0 units removed</p>
-          </div>
-
-          <div class="bg-slate-50/80 p-4 rounded-xl border border-slate-100">
-            <span class="text-[11px] font-bold uppercase tracking-wider text-slate-400">Net Movement Balance</span>
-            <p id="reportNetValue" class="text-2xl font-bold text-indigo-600 mt-1">₹0.00</p>
-            <p id="reportTxnCount" class="text-xs text-slate-500 mt-0.5 font-medium">0 transactions logged</p>
-          </div>
-        </div>
-      </div>
-
-      <!-- WORKSPACE GRID -->
-      <div class="grid grid-cols-1 lg:grid-cols-12 gap-8">
-
-        <!-- ENTRY FORM PANEL -->
-        <div class="lg:col-span-4">
-          <div class="bg-white rounded-2xl border border-slate-200/80 p-6 shadow-xs sticky top-24">
-            <div class="flex items-center justify-between pb-4 mb-4 border-b border-slate-100">
-              <h3 class="font-bold text-slate-900 text-base flex items-center gap-2">
-                <span>⚡</span> Record Stock Movement
-              </h3>
-            </div>
-
-            <form id="stockForm" class="space-y-4" autocomplete="off">
-              
-              <div class="relative">
-                <label class="text-xs font-semibold text-slate-600 mb-1 block">Item Code / Barcode *</label>
-                <input id="itemCode" type="text" required placeholder="e.g. SKU-1004"
-                  class="w-full px-3.5 py-2 border border-slate-200 rounded-xl focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 outline-none text-sm font-mono transition bg-slate-50/30">
-                <div id="codeSuggestions" class="autocomplete-list hidden absolute z-40 bg-white border border-slate-200 rounded-xl shadow-xl w-full mt-1.5 overflow-hidden"></div>
-              </div>
-
-              <div>
-                <label class="text-xs font-semibold text-slate-600 mb-1 block">Item Name *</label>
-                <input id="itemName" type="text" required placeholder="e.g. Wireless Ergonomic Mouse"
-                  class="w-full px-3.5 py-2 border border-slate-200 rounded-xl focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 outline-none text-sm transition bg-slate-50/30">
-              </div>
-
-              <div>
-                <label class="text-xs font-semibold text-slate-600 mb-1 block">Operation Type</label>
-                <div class="grid grid-cols-2 gap-2">
-                  <label class="cursor-pointer">
-                    <input type="radio" name="txnType" value="IN" class="peer hidden" checked onchange="updatePartyLabel()">
-                    <div class="text-center py-2.5 rounded-xl border border-slate-200 peer-checked:border-emerald-500 peer-checked:bg-emerald-50/60 peer-checked:text-emerald-700 font-bold text-xs transition">
-                      + Stock IN
-                    </div>
-                  </label>
-                  <label class="cursor-pointer">
-                    <input type="radio" name="txnType" value="OUT" class="peer hidden" onchange="updatePartyLabel()">
-                    <div class="text-center py-2.5 rounded-xl border border-slate-200 peer-checked:border-rose-500 peer-checked:bg-rose-50/60 peer-checked:text-rose-700 font-bold text-xs transition">
-                      - Stock OUT
-                    </div>
-                  </label>
-                </div>
-              </div>
-
-              <div>
-                <label id="partyLabel" class="text-xs font-semibold text-slate-600 mb-1 block">Supplier Name (Bought From)</label>
-                <input id="itemParty" type="text" placeholder="e.g. Apex Hardware Supplies"
-                  class="w-full px-3.5 py-2 border border-slate-200 rounded-xl focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 outline-none text-sm transition bg-slate-50/30">
-              </div>
-
-              <!-- LOCATION CONTAINER -->
-              <div class="p-3.5 bg-slate-50 rounded-xl border border-slate-200/60 space-y-2.5">
-                <span class="text-xs font-bold text-slate-700 flex items-center gap-1.5">
-                  <span>📍</span> Warehouse Storage Mapping
-                </span>
-                
-                <div>
-                  <label class="text-[11px] font-semibold text-slate-500 mb-0.5 block">Floor Level</label>
-                  <select id="itemFloor" class="w-full px-3 py-1.5 border border-slate-200 rounded-lg text-xs font-medium focus:ring-2 focus:ring-indigo-500 outline-none bg-white">
-                    <option value="Ground Floor">Ground Floor</option>
-                    <option value="1st Floor">1st Floor</option>
-                    <option value="2nd Floor">2nd Floor</option>
-                    <option value="3rd Floor">3rd Floor</option>
-                  </select>
-                </div>
-
-                <div class="grid grid-cols-2 gap-2">
-                  <div>
-                    <label class="text-[11px] font-semibold text-slate-500 mb-0.5 block">Rack No.</label>
-                    <input id="itemRack" type="text" placeholder="Rack A-04"
-                      class="w-full px-3 py-1.5 border border-slate-200 rounded-lg text-xs focus:ring-2 focus:ring-indigo-500 outline-none bg-white">
-                  </div>
-                  <div>
-                    <label class="text-[11px] font-semibold text-slate-500 mb-0.5 block">Box No.</label>
-                    <input id="itemBox" type="text" placeholder="Box 12"
-                      class="w-full px-3 py-1.5 border border-slate-200 rounded-lg text-xs focus:ring-2 focus:ring-indigo-500 outline-none bg-white">
-                  </div>
-                </div>
-              </div>
-
-              <div class="grid grid-cols-2 gap-2.5">
-                <div>
-                  <label class="text-xs font-semibold text-slate-600 mb-1 block">Quantity *</label>
-                  <input id="itemQty" type="number" min="1" value="1" required oninput="calculateTotal()"
-                    class="w-full px-3.5 py-2 border border-slate-200 rounded-xl focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 outline-none text-sm font-semibold transition bg-slate-50/30">
-                </div>
-                <div>
-                  <label class="text-xs font-semibold text-slate-600 mb-1 block">Unit Price (₹) *</label>
-                  <input id="itemUnitPrice" type="number" step="0.01" min="0" value="0.00" required oninput="calculateTotal()"
-                    class="w-full px-3.5 py-2 border border-slate-200 rounded-xl focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 outline-none text-sm font-semibold transition bg-slate-50/30">
-                </div>
-              </div>
-
-              <div>
-                <label class="text-xs font-semibold text-slate-600 mb-1 block">Calculated Total (₹)</label>
-                <input id="itemTotalPrice" type="text" readonly value="0.00"
-                  class="w-full px-3.5 py-2 bg-slate-100 border border-slate-200 rounded-xl font-bold text-slate-800 outline-none text-sm">
-              </div>
-
-              <div>
-                <label class="text-xs font-semibold text-slate-600 mb-1 block">Date *</label>
-                <input id="itemDate" type="date" required
-                  class="w-full px-3.5 py-2 border border-slate-200 rounded-xl focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 outline-none text-sm transition bg-slate-50/30">
-              </div>
-
-              <div>
-                <label class="text-xs font-semibold text-slate-600 mb-1 block">Remarks / Reference</label>
-                <input id="itemNotes" type="text" placeholder="Invoice reference, order ID..."
-                  class="w-full px-3.5 py-2 border border-slate-200 rounded-xl focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 outline-none text-sm transition bg-slate-50/30">
-              </div>
-
-              <button type="submit" class="w-full bg-slate-900 hover:bg-slate-800 text-white font-bold py-3 rounded-xl transition text-xs tracking-wider uppercase shadow-md shadow-slate-900/10">
-                ☁️ Commit to Cloud
-              </button>
-            </form>
-          </div>
-        </div>
-
-        <!-- TABLES CONTAINER -->
-        <div class="lg:col-span-8 space-y-8">
-
-          <!-- INVENTORY TABLE -->
-          <div class="bg-white rounded-2xl border border-slate-200/80 p-6 shadow-xs">
-            <div class="flex flex-wrap items-center justify-between gap-3 mb-5">
-              <div>
-                <h3 class="font-bold text-slate-900 text-base">📋 Active Inventory Directory</h3>
-                <p class="text-xs text-slate-500">Live item quantities, location badges, and stock values</p>
-              </div>
-              <input id="searchInventory" type="text" placeholder="Filter SKU, item, rack..."
-                class="px-3.5 py-2 border border-slate-200 rounded-xl text-xs font-medium focus:ring-2 focus:ring-indigo-500 outline-none w-60 bg-slate-50/50">
-            </div>
-
-            <div class="overflow-x-auto rounded-xl border border-slate-100">
-              <table class="w-full text-left text-xs">
-                <thead class="bg-slate-50 border-b border-slate-200 text-slate-500 uppercase tracking-wider font-semibold">
-                  <tr>
-                    <th class="py-3 px-3">SKU</th>
-                    <th class="py-3 px-3">Item Details</th>
-                    <th class="py-3 px-3">Location</th>
-                    <th class="py-3 px-3">Qty</th>
-                    <th class="py-3 px-3">Avg Price</th>
-                    <th class="py-3 px-3">Total Value</th>
-                    <th class="py-3 px-3">Status</th>
-                    <th class="py-3 px-3 text-right">Action</th>
-                  </tr>
-                </thead>
-                <tbody id="inventoryTableBody" class="divide-y divide-slate-100 font-medium text-slate-700"></tbody>
-              </table>
-              <p id="inventoryEmptyMsg" class="text-center text-slate-400 text-xs py-8 hidden">No items found matching your criteria.</p>
-            </div>
-          </div>
-
-          <!-- TRANSACTIONS LOG -->
-          <div class="bg-white rounded-2xl border border-slate-200/80 p-6 shadow-xs">
-            <div class="mb-4">
-              <h3 class="font-bold text-slate-900 text-base">🧾 Audit Log & History</h3>
-              <p class="text-xs text-slate-500">Complete historical register of inflows and outflows</p>
-            </div>
-
-            <div class="overflow-x-auto max-h-96 rounded-xl border border-slate-100">
-              <table class="w-full text-left text-xs">
-                <thead class="bg-slate-50 border-b border-slate-200 text-slate-500 uppercase tracking-wider font-semibold sticky top-0 z-10">
-                  <tr>
-                    <th class="py-3 px-3">Date</th>
-                    <th class="py-3 px-3">Item Name</th>
-                    <th class="py-3 px-3">Type</th>
-                    <th class="py-3 px-3">Party</th>
-                    <th class="py-3 px-3">Location</th>
-                    <th class="py-3 px-3">Qty</th>
-                    <th class="py-3 px-3">Unit Price</th>
-                    <th class="py-3 px-3">Total</th>
-                  </tr>
-                </thead>
-                <tbody id="txnTableBody" class="divide-y divide-slate-100 font-medium text-slate-700"></tbody>
-              </table>
-              <p id="txnEmptyMsg" class="text-center text-slate-400 text-xs py-8 hidden">No transaction logs recorded yet.</p>
-            </div>
-          </div>
-
-        </div>
-      </div>
-    </main>
+<div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-5">
+  <div class="bg-white rounded-xl p-5 border shadow-sm">
+    <span class="text-xs font-semibold uppercase tracking-wider text-slate-500">Total Products</span>
+    <p id="metricTotalItems" class="text-3xl font-bold mt-3">0</p>
+  </div>
+  <div class="bg-white rounded-xl p-5 border shadow-sm">
+    <span class="text-xs font-semibold uppercase tracking-wider text-slate-500">Stock Alerts</span>
+    <p id="metricLowStock" class="text-3xl font-bold text-rose-600 mt-3">0</p>
+  </div>
+  <div class="bg-white rounded-xl p-5 border shadow-sm">
+    <span class="text-xs font-semibold uppercase tracking-wider text-slate-500">Total Quantity</span>
+    <p id="metricTotalUnits" class="text-3xl font-bold text-emerald-600 mt-3">0</p>
+  </div>
+  <div class="bg-white rounded-xl p-5 border shadow-sm">
+    <span class="text-xs font-semibold uppercase tracking-wider text-slate-500">Portfolio Valuation</span>
+    <p id="metricTotalValue" class="text-3xl font-bold mt-3">₹0.00</p>
   </div>
 </div>
 
+<div class="bg-white rounded-2xl border p-6 shadow-sm">
+  <div class="flex flex-wrap items-center justify-between gap-4 pb-5 mb-5 border-b">
+    <div>
+      <h3 class="text-base font-bold">📈 Financial Summary & Movements</h3>
+      <p class="text-xs text-slate-500">Stock IN and OUT movement summary</p>
+    </div>
+
+    <div class="flex flex-wrap items-center gap-2.5">
+      <select id="reportRangeSelect" onchange="toggleCustomDateInputs();renderReports()" class="border rounded-xl text-xs font-semibold px-3 py-2">
+        <option value="month">This Month</option>
+        <option value="6months">Last 6 Months</option>
+        <option value="12months" selected>Last 12 Months</option>
+        <option value="all">All Time</option>
+        <option value="custom">Custom Range</option>
+      </select>
+
+      <div id="customDateRangeContainer" class="hidden flex items-center gap-2">
+        <input id="reportStartDate" type="date" onchange="renderReports()" class="border rounded-xl text-xs px-2.5 py-1.5">
+        <span class="text-xs text-slate-400">to</span>
+        <input id="reportEndDate" type="date" onchange="renderReports()" class="border rounded-xl text-xs px-2.5 py-1.5">
+      </div>
+
+      <button onclick="downloadPeriodReportCSV()" class="text-xs bg-indigo-600 hover:bg-indigo-700 text-white font-semibold px-4 py-2 rounded-xl">
+        📥 Export Period Report
+      </button>
+    </div>
+  </div>
+
+  <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+    <div class="bg-slate-50 p-4 rounded-xl border">
+      <span class="text-[11px] font-bold uppercase tracking-wider text-slate-400">Total Purchases</span>
+      <p id="reportSpent" class="text-2xl font-bold text-emerald-600 mt-1">₹0.00</p>
+      <p id="reportUnitsIn" class="text-xs text-slate-500 mt-0.5">0 units added</p>
+    </div>
+    <div class="bg-slate-50 p-4 rounded-xl border">
+      <span class="text-[11px] font-bold uppercase tracking-wider text-slate-400">Outflow Value</span>
+      <p id="reportOutValue" class="text-2xl font-bold text-rose-600 mt-1">₹0.00</p>
+      <p id="reportUnitsOut" class="text-xs text-slate-500 mt-0.5">0 units removed</p>
+    </div>
+    <div class="bg-slate-50 p-4 rounded-xl border">
+      <span class="text-[11px] font-bold uppercase tracking-wider text-slate-400">Net Movement</span>
+      <p id="reportNetValue" class="text-2xl font-bold text-indigo-600 mt-1">₹0.00</p>
+      <p id="reportTxnCount" class="text-xs text-slate-500 mt-0.5">0 transactions</p>
+    </div>
+  </div>
+</div>
+
+<div class="grid grid-cols-1 lg:grid-cols-12 gap-8">
+<div class="lg:col-span-4">
+<div class="bg-white rounded-2xl border p-6 shadow-sm lg:sticky lg:top-24">
+<h3 class="font-bold mb-4 pb-4 border-b">⚡ Record Stock Movement</h3>
+
+<form id="stockForm" class="space-y-4" autocomplete="off">
+<div class="relative">
+<label class="text-xs font-semibold block mb-1">Item Code / Barcode *</label>
+<input id="itemCode" type="text" required placeholder="SKU-1004" class="w-full px-3.5 py-2 border rounded-xl text-sm font-mono">
+<div id="codeSuggestions" class="autocomplete-list hidden absolute z-40 bg-white border rounded-xl shadow-xl w-full mt-1.5 overflow-hidden"></div>
+</div>
+
+<div>
+<label class="text-xs font-semibold block mb-1">Item Name *</label>
+<input id="itemName" type="text" required placeholder="Item name" class="w-full px-3.5 py-2 border rounded-xl text-sm">
+</div>
+
+<div>
+<label class="text-xs font-semibold block mb-1">Operation Type</label>
+<div class="grid grid-cols-2 gap-2">
+<label><input type="radio" name="txnType" value="IN" class="peer hidden" checked onchange="updatePartyLabel()">
+<div class="text-center py-2.5 rounded-xl border peer-checked:border-emerald-500 peer-checked:bg-emerald-50 font-bold text-xs">+ Stock IN</div></label>
+<label><input type="radio" name="txnType" value="OUT" class="peer hidden" onchange="updatePartyLabel()">
+<div class="text-center py-2.5 rounded-xl border peer-checked:border-rose-500 peer-checked:bg-rose-50 font-bold text-xs">- Stock OUT</div></label>
+</div>
+</div>
+
+<div>
+<label id="partyLabel" class="text-xs font-semibold block mb-1">Supplier Name (Bought From)</label>
+<input id="itemParty" type="text" placeholder="Supplier name" class="w-full px-3.5 py-2 border rounded-xl text-sm">
+</div>
+
+<div class="p-3.5 bg-slate-50 rounded-xl border space-y-2.5">
+<span class="text-xs font-bold">📍 Warehouse Storage Mapping</span>
+<div>
+<label class="text-[11px] font-semibold block">Floor Level</label>
+<select id="itemFloor" class="w-full px-3 py-1.5 border rounded-lg text-xs bg-white">
+<option>Ground Floor</option><option>1st Floor</option><option>2nd Floor</option><option>3rd Floor</option>
+</select>
+</div>
+<div class="grid grid-cols-2 gap-2">
+<div><label class="text-[11px] font-semibold block">Rack No.</label><input id="itemRack" type="text" placeholder="Rack A-04" class="w-full px-3 py-1.5 border rounded-lg text-xs"></div>
+<div><label class="text-[11px] font-semibold block">Box No.</label><input id="itemBox" type="text" placeholder="Box 12" class="w-full px-3 py-1.5 border rounded-lg text-xs"></div>
+</div>
+</div>
+
+<div class="grid grid-cols-2 gap-2.5">
+<div><label class="text-xs font-semibold block mb-1">Quantity *</label><input id="itemQty" type="number" min="1" step="1" value="1" required oninput="calculateTotal()" class="w-full px-3.5 py-2 border rounded-xl text-sm"></div>
+<div><label class="text-xs font-semibold block mb-1">Unit Price (₹) *</label><input id="itemUnitPrice" type="number" step="0.01" min="0" value="0.00" required oninput="calculateTotal()" class="w-full px-3.5 py-2 border rounded-xl text-sm"></div>
+</div>
+
+<div>
+<label class="text-xs font-semibold block mb-1">Calculated Total (₹)</label>
+<input id="itemTotalPrice" type="text" readonly value="0.00" class="w-full px-3.5 py-2 bg-slate-100 border rounded-xl font-bold text-sm">
+</div>
+
+<div><label class="text-xs font-semibold block mb-1">Date *</label><input id="itemDate" type="date" required class="w-full px-3.5 py-2 border rounded-xl text-sm"></div>
+<div><label class="text-xs font-semibold block mb-1">Remarks / Reference</label><input id="itemNotes" type="text" placeholder="Invoice reference, order ID..." class="w-full px-3.5 py-2 border rounded-xl text-sm"></div>
+
+<button id="commitButton" type="submit" class="w-full bg-slate-900 hover:bg-slate-800 text-white font-bold py-3 rounded-xl text-xs uppercase">
+☁️ Commit to Cloud
+</button>
+</form>
+</div>
+</div>
+
+<div class="lg:col-span-8 space-y-8">
+<div class="bg-white rounded-2xl border p-6 shadow-sm">
+<div class="flex flex-wrap items-center justify-between gap-3 mb-5">
+<div><h3 class="font-bold">📋 Active Inventory Directory</h3><p class="text-xs text-slate-500">Live cloud inventory</p></div>
+<input id="searchInventory" type="text" placeholder="Filter SKU, item, rack..." class="px-3.5 py-2 border rounded-xl text-xs w-60">
+</div>
+
+<div class="overflow-x-auto rounded-xl border">
+<table class="w-full text-left text-xs">
+<thead class="bg-slate-50 border-b text-slate-500 uppercase tracking-wider font-semibold">
+<tr><th class="py-3 px-3">SKU</th><th class="py-3 px-3">Item</th><th class="py-3 px-3">Location</th><th class="py-3 px-3">Qty</th><th class="py-3 px-3">Avg Price</th><th class="py-3 px-3">Total Value</th><th class="py-3 px-3">Status</th><th class="py-3 px-3 text-right">Action</th></tr>
+</thead>
+<tbody id="inventoryTableBody" class="divide-y divide-slate-100"></tbody>
+</table>
+<p id="inventoryEmptyMsg" class="text-center text-slate-400 text-xs py-8 hidden">No items found.</p>
+</div>
+</div>
+
+<div class="bg-white rounded-2xl border p-6 shadow-sm">
+<div class="mb-4"><h3 class="font-bold">🧾 Audit Log & History</h3><p class="text-xs text-slate-500">Complete historical register</p></div>
+<div class="overflow-x-auto max-h-96 rounded-xl border">
+<table class="w-full text-left text-xs">
+<thead class="bg-slate-50 border-b text-slate-500 uppercase tracking-wider font-semibold sticky top-0 z-10">
+<tr><th class="py-3 px-3">Date</th><th class="py-3 px-3">Item</th><th class="py-3 px-3">Type</th><th class="py-3 px-3">Party</th><th class="py-3 px-3">Location</th><th class="py-3 px-3">Qty</th><th class="py-3 px-3">Unit Price</th><th class="py-3 px-3">Total</th></tr>
+</thead>
+<tbody id="txnTableBody" class="divide-y divide-slate-100"></tbody>
+</table>
+<p id="txnEmptyMsg" class="text-center text-slate-400 text-xs py-8 hidden">No transaction logs recorded yet.</p>
+</div>
+</div>
+</div>
+</div>
+</main>
+</div>
+</div>
+
 <script>
-/* ============ FIREBASE INITIALIZATION ============ */
+/* ================= FIREBASE ================= */
 const firebaseConfig = {
   apiKey: "AIzaSyC7ZCEl4ez4Tt8HPTQqNjLscNs1uVkOVgo",
   authDomain: "stockkeeper-8d4ed.firebaseapp.com",
@@ -412,205 +278,219 @@ const firebaseConfig = {
 };
 
 firebase.initializeApp(firebaseConfig);
+
 const auth = firebase.auth();
 const db = firebase.firestore();
 const provider = new firebase.auth.GoogleAuthProvider();
 
+/*
+ IMPORTANT:
+ This version uses ONE SHARED STORE instead of users/{uid}.
+ Therefore every authenticated Google account sees the same inventory.
+ Later, Firestore Security Rules should restrict writes to your selected users.
+*/
+const STORE_ID = "main";
+const STORE_REF = db.collection("stores").doc(STORE_ID);
+const INVENTORY_REF = STORE_REF.collection("inventory");
+const TRANSACTIONS_REF = STORE_REF.collection("transactions");
+const SETTINGS_REF = STORE_REF.collection("settings").doc("app");
+
+const LOW_STOCK_THRESHOLD = 5;
+
+let inventory = [];
+let transactions = [];
+let appPin = localStorage.getItem("sk_app_pin_v5") || "";
 let unsubscribeInventory = null;
 let unsubscribeTransactions = null;
+let unsubscribeSettings = null;
 
+/* ================= AUTH ================= */
 function handleGoogleSignIn() {
   auth.signInWithPopup(provider)
-    .then((result) => showToast(`Welcome back, ${result.user.displayName}!`, "success"))
-    .catch((error) => showToast(error.message, "error"));
+    .then(result => showToast(`Welcome, ${result.user.displayName || result.user.email}!`, "success"))
+    .catch(error => {
+      console.error("Google sign-in:", error);
+      showToast(getFirebaseError(error), "error");
+    });
 }
 
 function handleSignOut() {
   auth.signOut()
-    .then(() => {
-      if (unsubscribeInventory) {
-        unsubscribeInventory();
-        unsubscribeInventory = null;
-      }
-      if (unsubscribeTransactions) {
-        unsubscribeTransactions();
-        unsubscribeTransactions = null;
-      }
-      inventory = [];
-      transactions = [];
-      renderAll();
-      showToast("Session signed out.", "info");
-    })
-    .catch((error) => showToast(error.message, "error"));
+    .then(() => showToast("Signed out.", "info"))
+    .catch(error => showToast(getFirebaseError(error), "error"));
 }
 
-auth.onAuthStateChanged((user) => {
-  const authBtnContainer = document.getElementById("authButtonContainer");
-  const mainContent = document.getElementById("mainAppContent");
+auth.onAuthStateChanged(user => {
+  const main = document.getElementById("mainAppContent");
+  const box = document.getElementById("authButtonContainer");
 
   if (user) {
-    mainContent.classList.remove("hidden");
-    authBtnContainer.innerHTML = `
+    main.classList.remove("hidden");
+
+    box.innerHTML = `
       <div class="flex items-center gap-3">
-        <img src="${user.photoURL || ''}" class="w-8 h-8 rounded-full border border-slate-700" alt="Avatar">
+        <img src="${escapeHtml(user.photoURL || "")}" class="w-8 h-8 rounded-full border border-slate-700" alt="">
         <div class="min-w-0 flex-1">
           <p class="text-xs font-semibold text-white truncate">${escapeHtml(user.displayName || user.email)}</p>
-          <button onclick="handleSignOut()" class="text-[10px] text-slate-400 hover:text-slate-200 transition">Sign out</button>
+          <p class="text-[10px] text-slate-500 truncate">${escapeHtml(user.email || "")}</p>
+          <button onclick="handleSignOut()" class="text-[10px] text-slate-400 hover:text-white">Sign out</button>
         </div>
-      </div>
-    `;
-    setupFirestoreListeners(user.uid);
+      </div>`;
+
+    setupFirestoreListeners();
   } else {
-    mainContent.classList.add("hidden");
-    authBtnContainer.innerHTML = `
-      <button onclick="handleGoogleSignIn()" class="w-full flex items-center justify-center gap-2 text-xs bg-indigo-600 hover:bg-indigo-500 text-white font-semibold px-3 py-2.5 rounded-xl transition shadow-lg shadow-indigo-600/20">
-        <svg class="w-3.5 h-3.5 fill-current" viewBox="0 0 24 24">
-          <path d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z"/>
-          <path d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z"/>
-          <path d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.06H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.94l2.85-2.22.81-.63z"/>
-          <path d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.06l3.66 2.84c.87-2.6 3.3-4.52 6.16-4.52z"/>
-        </svg>
+    main.classList.add("hidden");
+    box.innerHTML = `
+      <button onclick="handleGoogleSignIn()" class="w-full text-xs bg-indigo-600 hover:bg-indigo-500 text-white font-semibold px-3 py-2.5 rounded-xl">
         Sign in with Google
-      </button>
-    `;
+      </button>`;
+    stopListeners();
+    setSyncStatus("Signed out", false);
   }
 });
 
-/* ============ FIRESTORE REAL-TIME LISTENERS ============ */
-function setupFirestoreListeners(uid) {
-  const pinRaw = localStorage.getItem("sk_app_pin_v4");
-  if (pinRaw) appPin = pinRaw;
-
-  // Prevent duplicate listeners after re-login.
-  if (unsubscribeInventory) {
-    unsubscribeInventory();
-    unsubscribeInventory = null;
-  }
-  if (unsubscribeTransactions) {
-    unsubscribeTransactions();
-    unsubscribeTransactions = null;
-  }
-
-  const userRef = db.collection("users").doc(uid);
-
-  // Real-time Inventory listener
-  unsubscribeInventory = userRef.collection("inventory")
-    .onSnapshot((snapshot) => {
-      inventory = snapshot.docs.map(doc => ({
-        id: doc.id,
-        ...doc.data()
-      }));
-
-      console.log("[StockKeeper] Inventory loaded:", inventory);
-      const sync = document.getElementById("syncStatus");
-      if (sync) {
-        sync.innerHTML = `<span class="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse"></span> Firebase Cloud Connected`;
-        sync.className = "inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-semibold bg-emerald-50 text-emerald-700 border border-emerald-200/60";
-      }
-      renderAll();
-
-    }, (error) => {
-      console.error("[StockKeeper] Firestore inventory error:", error.code, error.message);
-      inventory = [];
-      const sync = document.getElementById("syncStatus");
-      if (sync) {
-        sync.innerHTML = `<span class="w-1.5 h-1.5 rounded-full bg-rose-500"></span> Firestore Error`;
-        sync.className = "inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-semibold bg-rose-50 text-rose-700 border border-rose-200/60";
-      }
-      renderAll();
-      showToast(`Inventory database error: ${error.code || "unknown_error"}`, "error");
-    });
-
-  // Real-time Transactions listener
-  unsubscribeTransactions = userRef.collection("transactions")
-    .onSnapshot((snapshot) => {
-      transactions = snapshot.docs.map(doc => ({
-        id: doc.id,
-        ...doc.data()
-      }));
-
-      console.log("[StockKeeper] Transactions loaded:", transactions);
-      renderAll();
-
-    }, (error) => {
-      console.error("[StockKeeper] Firestore transactions error:", error.code, error.message);
-      transactions = [];
-      const sync = document.getElementById("syncStatus");
-      if (sync) {
-        sync.innerHTML = `<span class="w-1.5 h-1.5 rounded-full bg-rose-500"></span> Firestore Error`;
-        sync.className = "inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-semibold bg-rose-50 text-rose-700 border border-rose-200/60";
-      }
-      renderAll();
-      showToast(`Transaction database error: ${error.code || "unknown_error"}`, "error");
-    });
+/* ================= FIRESTORE LISTENERS ================= */
+function stopListeners() {
+  if (unsubscribeInventory) unsubscribeInventory();
+  if (unsubscribeTransactions) unsubscribeTransactions();
+  if (unsubscribeSettings) unsubscribeSettings();
+  unsubscribeInventory = unsubscribeTransactions = unsubscribeSettings = null;
 }
 
-/* ============ CONSTANTS & STATE ============ */
-const LOW_STOCK_THRESHOLD = 5;
-let inventory = [];
-let transactions = [];
-let appPin = "1234";
+function setupFirestoreListeners() {
+  stopListeners();
 
-/* ============ EMAILJS ALERT FUNCTION ============ */
-function sendLowStockEmail(itemName, itemCode, currentQty) {
-  const serviceID = "service_jdnsri6";
-  const templateID = "template_0dpp4zi";
+  setSyncStatus("Connecting...", false);
 
-  const templateParams = {
-    item_name: itemName,
-    item_code: itemCode,
-    current_qty: currentQty
-  };
+  unsubscribeInventory = INVENTORY_REF.onSnapshot(
+    snapshot => {
+      inventory = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+      renderAll();
+      setSyncStatus("Firebase Cloud Connected", true);
+    },
+    error => {
+      console.error("Inventory listener error:", error);
+      setSyncStatus("Cloud Error", false);
+      showToast("Firestore inventory error: " + getFirebaseError(error), "error");
+    }
+  );
 
-  emailjs.send(serviceID, templateID, templateParams)
-    .then(() => {
-      showToast(`Low stock alert sent for ${itemName}`, "info");
-    })
-    .catch((error) => {
-      console.error("Failed to send low stock alert email:", error);
-    });
+  unsubscribeTransactions = TRANSACTIONS_REF.onSnapshot(
+    snapshot => {
+      transactions = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+      renderAll();
+    },
+    error => {
+      console.error("Transaction listener error:", error);
+      showToast("Firestore transaction error: " + getFirebaseError(error), "error");
+    }
+  );
+
+  unsubscribeSettings = SETTINGS_REF.onSnapshot(
+    doc => {
+      if (doc.exists && doc.data().pin) {
+        appPin = String(doc.data().pin);
+        localStorage.setItem("sk_app_pin_v5", appPin);
+      }
+    },
+    error => console.warn("Settings listener:", error)
+  );
 }
 
-/* ============ FORM UI HELPERS ============ */
-function updatePartyLabel() {
-  const type = document.querySelector('input[name="txnType"]:checked').value;
-  const partyLabel = document.getElementById("partyLabel");
-  const partyInput = document.getElementById("itemParty");
-
-  if (type === "IN") {
-    partyLabel.textContent = "Supplier Name (Bought From)";
-    partyInput.placeholder = "e.g. Apex Hardware Supplies";
-  } else {
-    partyLabel.textContent = "Customer Name (Sold To)";
-    partyInput.placeholder = "e.g. Acme Corp";
-  }
+function setSyncStatus(text, connected) {
+  const el = document.getElementById("syncStatus");
+  el.innerHTML = `<span class="w-1.5 h-1.5 rounded-full ${connected ? "bg-emerald-500 animate-pulse" : "bg-rose-500"}"></span> ${escapeHtml(text)}`;
+  el.className = `inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-semibold border ${connected ? "bg-emerald-50 text-emerald-700 border-emerald-200" : "bg-rose-50 text-rose-700 border-rose-200"}`;
 }
 
-/* ============ SECURITY PIN CHECK ============ */
-function verifyPin(actionName = "perform this action") {
-  const enteredPin = prompt(`🔒 Security Verification:\nPlease enter PIN to ${actionName}:`);
-  if (enteredPin === null) return false;
-  if (enteredPin === appPin) {
-    return true;
-  } else {
-    showToast("Incorrect PIN! Access denied.", "error");
+/* ================= PIN ================= */
+async function ensurePin() {
+  if (appPin && /^\d{4}$/.test(appPin)) return true;
+
+  const newPin = prompt("Create your 4-digit Security PIN:");
+  if (newPin === null) return false;
+
+  if (!/^\d{4}$/.test(newPin.trim())) {
+    showToast("PIN must contain exactly 4 digits.", "error");
     return false;
   }
+
+  appPin = newPin.trim();
+  localStorage.setItem("sk_app_pin_v5", appPin);
+
+  try {
+    await SETTINGS_REF.set({
+      pin: appPin,
+      updatedAt: firebase.firestore.FieldValue.serverTimestamp()
+    }, { merge: true });
+  } catch (error) {
+    console.error("PIN cloud save:", error);
+    showToast("PIN could not be saved to cloud. Check Firestore rules.", "error");
+  }
+
+  return true;
 }
 
-function changeAppPin() {
-  if (!verifyPin("change security PIN")) return;
+async function verifyPin(actionName = "perform this action") {
+  if (!(await ensurePin())) return false;
+
+  const entered = prompt(`🔒 Enter your 4-digit PIN to ${actionName}:`);
+  if (entered === null) return false;
+
+  if (entered.trim() === appPin) return true;
+
+  showToast("Incorrect PIN. Access denied.", "error");
+  return false;
+}
+
+async function changeAppPin() {
+  if (!(await verifyPin("change security PIN"))) return;
+
   const newPin = prompt("Enter new 4-digit PIN:");
-  if (newPin && newPin.trim().length >= 4) {
-    appPin = newPin.trim();
-    localStorage.setItem("sk_app_pin_v4", appPin);
-    showToast("Security PIN updated successfully.", "success");
-  } else {
-    showToast("PIN must be at least 4 digits.", "error");
+  if (newPin === null) return;
+
+  if (!/^\d{4}$/.test(newPin.trim())) {
+    showToast("PIN must contain exactly 4 digits.", "error");
+    return;
+  }
+
+  appPin = newPin.trim();
+  localStorage.setItem("sk_app_pin_v5", appPin);
+
+  try {
+    await SETTINGS_REF.set({
+      pin: appPin,
+      updatedAt: firebase.firestore.FieldValue.serverTimestamp()
+    }, { merge: true });
+
+    showToast("Security PIN updated in cloud.", "success");
+  } catch (error) {
+    console.error(error);
+    showToast("PIN update failed: " + getFirebaseError(error), "error");
   }
 }
 
-/* ============ TOASTS ============ */
+/* ================= HELPERS ================= */
+function getFirebaseError(error) {
+  if (!error) return "Unknown error";
+  const code = error.code || "";
+  const map = {
+    "permission-denied": "Permission denied by Firestore rules.",
+    "failed-precondition": "Firestore is not configured correctly.",
+    "unauthenticated": "You must sign in first.",
+    "not-found": "Requested cloud document was not found.",
+    "already-exists": "Cloud record already exists.",
+    "unavailable": "Firebase is temporarily unavailable."
+  };
+  return map[code] || error.message || String(error);
+}
+
+function escapeHtml(value) {
+  const div = document.createElement("div");
+  div.textContent = String(value ?? "");
+  return div.innerHTML;
+}
+
 function showToast(message, type = "success") {
   const colors = {
     success: "bg-slate-900 border border-slate-700",
@@ -619,298 +499,226 @@ function showToast(message, type = "success") {
   };
   const container = document.getElementById("toastContainer");
   const toast = document.createElement("div");
-  toast.className = `toast text-white px-4 py-3 rounded-xl shadow-xl text-xs font-semibold flex items-center justify-between ${colors[type]}`;
-  toast.innerHTML = `<span>${message}</span>`;
+  toast.className = `toast text-white px-4 py-3 rounded-xl shadow-xl text-xs font-semibold ${colors[type] || colors.info}`;
+  toast.textContent = message;
   container.appendChild(toast);
-  setTimeout(() => toast.remove(), 3000);
+  setTimeout(() => toast.remove(), 3200);
 }
 
-/* ============ PRICE CALCULATIONS & PRICING ENGINE ============ */
 function calculateTotal() {
-  const qty = parseFloat(document.getElementById("itemQty").value) || 0;
-  const unitPrice = parseFloat(document.getElementById("itemUnitPrice").value) || 0;
-  document.getElementById("itemTotalPrice").value = (qty * unitPrice).toFixed(2);
-}
-
-function getDerivedAvgUnitPrice(code) {
-  if (!code) return 0;
-
-  const item = inventory.find(
-    i => i.code && i.code.toLowerCase() === code.toLowerCase()
-  );
-
-  if (item) {
-    const itemQty = Number(item.qty) || 0;
-
-    if (item.avgUnitPrice !== undefined && item.avgUnitPrice !== null) {
-      const storedAvg = Number(item.avgUnitPrice);
-      if (Number.isFinite(storedAvg)) return storedAvg;
-    }
-
-    if (item.totalCost !== undefined && item.totalCost !== null && itemQty > 0) {
-      const storedCost = Number(item.totalCost);
-      if (Number.isFinite(storedCost)) return storedCost / itemQty;
-    }
-  }
-
-  // Backward-compatible fallback for inventory created by older versions.
-  const inTxns = transactions.filter(
-    t => t.code &&
-         t.code.toLowerCase() === code.toLowerCase() &&
-         t.type === "IN"
-  );
-
-  if (inTxns.length > 0) {
-    const totalQty = inTxns.reduce(
-      (sum, t) => sum + (Number(t.qty) || 0),
-      0
-    );
-
-    const totalSpent = inTxns.reduce(
-      (sum, t) => sum + ((Number(t.qty) || 0) * (Number(t.unitPrice) || 0)),
-      0
-    );
-
-    if (totalQty > 0) return totalSpent / totalQty;
-  }
-
-  if (item && item.unitPrice !== undefined && item.unitPrice !== null) {
-    return Number(item.unitPrice) || 0;
-  }
-
-  return 0;
+  const qty = Number(document.getElementById("itemQty").value) || 0;
+  const price = Number(document.getElementById("itemUnitPrice").value) || 0;
+  document.getElementById("itemTotalPrice").value = (qty * price).toFixed(2);
 }
 
 function formatLocation(floor, rack, box) {
   const parts = [];
   if (floor) parts.push(floor);
-  if (rack) parts.push(`Rack: ${rack}`);
-  if (box) parts.push(`Box: ${box}`);
-  return parts.length > 0 ? parts.join(", ") : "N/A";
+  if (rack) parts.push("Rack: " + rack);
+  if (box) parts.push("Box: " + box);
+  return parts.length ? parts.join(", ") : "N/A";
 }
 
-/* ============ RENDER METRICS & REPORTS ============ */
-function renderMetrics() {
-  const totalItems = inventory.length;
+function formatDate(value) {
+  if (!value) return "N/A";
+  let date;
+  if (value && typeof value.toDate === "function") date = value.toDate();
+  else date = new Date(value);
+  if (isNaN(date.getTime())) return "N/A";
+  return date.toLocaleString(undefined, {
+    year: "numeric", month: "short", day: "2-digit",
+    hour: "2-digit", minute: "2-digit"
+  });
+}
 
-  const lowStock = inventory.filter(
-    i => (Number(i.qty) || 0) <= LOW_STOCK_THRESHOLD
-  ).length;
+function dateStamp() {
+  const d = new Date();
+  return `${d.getFullYear()}${String(d.getMonth()+1).padStart(2,"0")}${String(d.getDate()).padStart(2,"0")}_${String(d.getHours()).padStart(2,"0")}${String(d.getMinutes()).padStart(2,"0")}`;
+}
 
-  const totalUnits = inventory.reduce(
-    (sum, i) => sum + (Number(i.qty) || 0),
-    0
+function setTodayDate() {
+  const d = new Date();
+  const y = d.getFullYear();
+  const m = String(d.getMonth()+1).padStart(2,"0");
+  const day = String(d.getDate()).padStart(2,"0");
+  document.getElementById("itemDate").value = `${y}-${m}-${day}`;
+  document.getElementById("reportStartDate").value = `${y}-${m}-01`;
+  document.getElementById("reportEndDate").value = `${y}-${m}-${day}`;
+}
+
+function updatePartyLabel() {
+  const type = document.querySelector('input[name="txnType"]:checked').value;
+  document.getElementById("partyLabel").textContent =
+    type === "IN" ? "Supplier Name (Bought From)" : "Customer Name (Sold To)";
+  document.getElementById("itemParty").placeholder =
+    type === "IN" ? "Supplier name" : "Customer / Buyer name";
+}
+
+/* ================= PRICE ================= */
+function getDerivedAvgUnitPrice(code) {
+  if (!code) return 0;
+
+  const inTxns = transactions.filter(t =>
+    t.code &&
+    t.code.toLowerCase() === code.toLowerCase() &&
+    t.type === "IN"
   );
 
-  const totalVal = inventory.reduce((sum, i) => {
-    const qty = Number(i.qty) || 0;
+  const totalQty = inTxns.reduce((sum,t) => sum + (Number(t.qty) || 0), 0);
+  const totalSpent = inTxns.reduce((sum,t) =>
+    sum + ((Number(t.qty) || 0) * (Number(t.unitPrice) || 0)), 0);
 
-    if (i.totalCost !== undefined && i.totalCost !== null) {
-      const storedCost = Number(i.totalCost);
-      if (Number.isFinite(storedCost)) return sum + storedCost;
-    }
+  if (totalQty > 0) return totalSpent / totalQty;
 
-    const avgPrice = getDerivedAvgUnitPrice(i.code);
-    return sum + (qty * avgPrice);
+  const item = inventory.find(i =>
+    i.code && i.code.toLowerCase() === code.toLowerCase()
+  );
+
+  return item ? Number(item.unitPrice) || 0 : 0;
+}
+
+/* ================= RENDER ================= */
+function renderMetrics() {
+  const totalItems = inventory.length;
+  const lowStock = inventory.filter(i => Number(i.qty) < LOW_STOCK_THRESHOLD).length;
+  const totalUnits = inventory.reduce((sum,i) => sum + (Number(i.qty) || 0), 0);
+
+  const totalValue = inventory.reduce((sum,i) => {
+    return sum + (Number(i.qty) || 0) * getDerivedAvgUnitPrice(i.code);
   }, 0);
 
   document.getElementById("metricTotalItems").textContent = totalItems;
   document.getElementById("metricLowStock").textContent = lowStock;
   document.getElementById("metricTotalUnits").textContent = totalUnits;
-  document.getElementById("metricTotalValue").textContent =
-    `₹${totalVal.toFixed(2)}`;
-}
-
-function toggleCustomDateInputs() {
-  const range = document.getElementById("reportRangeSelect").value;
-  const container = document.getElementById("customDateRangeContainer");
-  if (range === "custom") {
-    container.classList.remove("hidden");
-  } else {
-    container.classList.add("hidden");
-  }
+  document.getElementById("metricTotalValue").textContent = `₹${totalValue.toFixed(2)}`;
 }
 
 function getFilteredReportTransactions() {
   const range = document.getElementById("reportRangeSelect").value;
   const now = new Date();
-  
-  let startDate = new Date(0);
-  let endDate = new Date();
+
+  let start = new Date(0);
+  let end = new Date();
 
   if (range === "month") {
-    startDate = new Date(now.getFullYear(), now.getMonth(), 1);
+    start = new Date(now.getFullYear(), now.getMonth(), 1);
   } else if (range === "6months") {
-    startDate = new Date(now.getFullYear(), now.getMonth() - 6, now.getDate());
+    start = new Date(now.getFullYear(), now.getMonth()-6, now.getDate());
   } else if (range === "12months") {
-    startDate = new Date(now.getFullYear(), now.getMonth() - 12, now.getDate());
+    start = new Date(now.getFullYear(), now.getMonth()-12, now.getDate());
   } else if (range === "custom") {
-    const sVal = document.getElementById("reportStartDate").value;
-    const eVal = document.getElementById("reportEndDate").value;
-    if (sVal) startDate = new Date(sVal);
-    if (eVal) {
-      endDate = new Date(eVal);
-      endDate.setHours(23, 59, 59, 999);
-    }
+    const s = document.getElementById("reportStartDate").value;
+    const e = document.getElementById("reportEndDate").value;
+    if (s) start = new Date(s + "T00:00:00");
+    if (e) end = new Date(e + "T23:59:59.999");
   }
 
   return transactions.filter(t => {
-    const tDate = new Date(t.date);
-    return tDate >= startDate && tDate <= endDate;
+    const d = t.date && typeof t.date.toDate === "function" ? t.date.toDate() : new Date(t.date);
+    return d >= start && d <= end;
   });
 }
 
+function toggleCustomDateInputs() {
+  const show = document.getElementById("reportRangeSelect").value === "custom";
+  document.getElementById("customDateRangeContainer").classList.toggle("hidden", !show);
+}
+
 function renderReports() {
-  const filteredTxns = getFilteredReportTransactions();
+  const txns = getFilteredReportTransactions();
+  let spent=0, out=0, inQty=0, outQty=0;
 
-  let spent = 0;
-  let outVal = 0;
-  let unitsIn = 0;
-  let unitsOut = 0;
-
-  filteredTxns.forEach(t => {
-    const qty = Number(t.qty) || 0;
-    const unitPrice = Number(t.unitPrice) || 0;
-    const totalAmt = qty * unitPrice;
-
+  txns.forEach(t => {
+    const q = Number(t.qty) || 0;
+    const p = Number(t.unitPrice) || 0;
     if (t.type === "IN") {
-      spent += totalAmt;
-      unitsIn += qty;
+      spent += q*p;
+      inQty += q;
     } else {
-      outVal += totalAmt;
-      unitsOut += qty;
+      out += q*p;
+      outQty += q;
     }
   });
 
   document.getElementById("reportSpent").textContent = `₹${spent.toFixed(2)}`;
-  document.getElementById("reportUnitsIn").textContent = `${unitsIn} units added`;
-
-  document.getElementById("reportOutValue").textContent = `₹${outVal.toFixed(2)}`;
-  document.getElementById("reportUnitsOut").textContent = `${unitsOut} units removed`;
-
-  const net = spent - outVal;
-  document.getElementById("reportNetValue").textContent = `₹${net.toFixed(2)}`;
-  document.getElementById("reportTxnCount").textContent = `${filteredTxns.length} transactions logged`;
+  document.getElementById("reportUnitsIn").textContent = `${inQty} units added`;
+  document.getElementById("reportOutValue").textContent = `₹${out.toFixed(2)}`;
+  document.getElementById("reportUnitsOut").textContent = `${outQty} units removed`;
+  document.getElementById("reportNetValue").textContent = `₹${(spent-out).toFixed(2)}`;
+  document.getElementById("reportTxnCount").textContent = `${txns.length} transactions logged`;
 }
 
-function downloadPeriodReportCSV() {
-  const filteredTxns = getFilteredReportTransactions();
-  if (filteredTxns.length === 0) {
-    showToast("No transactions found for the selected period.", "info");
-    return;
-  }
-
-  const rows = [["Date", "Item Code", "Item Name", "Type", "Supplier / Customer", "Floor", "Rack No", "Box No", "Quantity", "Unit Price (INR)", "Total Amount (INR)", "Notes"]];
-  
-  [...filteredTxns].sort((a, b) => new Date(b.date) - new Date(a.date)).forEach(t => {
-    const uPrice = Number(t.unitPrice) || 0;
-    const qty = Number(t.qty) || 0;
-    rows.push([
-      formatDate(t.date),
-      t.code,
-      t.name,
-      t.type,
-      t.party || "-",
-      t.floor || "-",
-      t.rack || "-",
-      t.box || "-",
-      qty,
-      uPrice.toFixed(2),
-      (qty * uPrice).toFixed(2),
-      t.notes || ""
-    ]);
-  });
-
-  const range = document.getElementById("reportRangeSelect").value;
-  downloadCSV(`period_report_${range}_${dateStamp()}.csv`, rows);
-  showToast("Period report CSV downloaded successfully.", "success");
-}
-
-/* ============ RENDER TABLES ============ */
-function renderInventory(filter = "") {
+function renderInventory(filter="") {
   const tbody = document.getElementById("inventoryTableBody");
-  const emptyMsg = document.getElementById("inventoryEmptyMsg");
+  const empty = document.getElementById("inventoryEmptyMsg");
   tbody.innerHTML = "";
 
   const term = filter.toLowerCase();
-  const filtered = inventory.filter(i =>
-    (i.name && i.name.toLowerCase().includes(term)) ||
-    (i.code && i.code.toLowerCase().includes(term)) ||
-    (i.floor && i.floor.toLowerCase().includes(term)) ||
-    (i.rack && i.rack.toLowerCase().includes(term)) ||
-    (i.box && i.box.toLowerCase().includes(term))
-  ).sort((a, b) => (a.name || "").localeCompare(b.name || ""));
 
-  if (filtered.length === 0) {
-    emptyMsg.classList.remove("hidden");
-  } else {
-    emptyMsg.classList.add("hidden");
-  }
+  const filtered = inventory.filter(i =>
+    [i.name,i.code,i.floor,i.rack,i.box].some(v =>
+      String(v || "").toLowerCase().includes(term)
+    )
+  ).sort((a,b) => String(a.name || "").localeCompare(String(b.name || "")));
+
+  empty.classList.toggle("hidden", filtered.length !== 0);
 
   filtered.forEach(item => {
-    const itemQty = Number(item.qty) || 0;
-    const isLow = itemQty <= LOW_STOCK_THRESHOLD;
-    const badge = isLow
-      ? `<span class="inline-flex items-center px-2 py-0.5 rounded-md text-[10px] font-semibold bg-rose-50 text-rose-700 border border-rose-200">Low Stock</span>`
-      : `<span class="inline-flex items-center px-2 py-0.5 rounded-md text-[10px] font-semibold bg-emerald-50 text-emerald-700 border border-emerald-200">In Stock</span>`;
-
-    const avgPrice = getDerivedAvgUnitPrice(item.code);
-    const itemTotalVal = itemQty * avgPrice;
-    const locText = formatLocation(item.floor, item.rack, item.box);
+    const qty = Number(item.qty) || 0;
+    const avg = getDerivedAvgUnitPrice(item.code);
+    const low = qty < LOW_STOCK_THRESHOLD;
 
     const row = document.createElement("tr");
-    row.className = "hover:bg-slate-50/80 transition";
+    row.className = "hover:bg-slate-50";
+
     row.innerHTML = `
-      <td class="py-3 px-3 font-mono text-[11px] font-bold text-slate-500">${escapeHtml(item.code || "")}</td>
-      <td class="py-3 px-3 font-bold text-slate-800">${escapeHtml(item.name || "")}</td>
-      <td class="py-3 px-3 text-[11px] font-semibold text-indigo-600 bg-indigo-50/40 rounded-lg">${escapeHtml(locText)}</td>
-      <td class="py-3 px-3 font-bold text-slate-900">${itemQty}</td>
-      <td class="py-3 px-3 text-slate-500">₹${avgPrice.toFixed(2)}</td>
-      <td class="py-3 px-3 font-bold text-slate-800">₹${itemTotalVal.toFixed(2)}</td>
-      <td class="py-3 px-3">${badge}</td>
-      <td class="py-3 px-3 text-right">
-        <button onclick="deleteItem('${escapeHtml(item.id || item.code)}')" class="text-rose-500 hover:text-rose-700 font-semibold text-[11px] transition">Remove</button>
+      <td class="py-3 px-3 font-mono font-bold">${escapeHtml(item.code)}</td>
+      <td class="py-3 px-3 font-bold">${escapeHtml(item.name)}</td>
+      <td class="py-3 px-3 text-[11px] text-indigo-600">${escapeHtml(formatLocation(item.floor,item.rack,item.box))}</td>
+      <td class="py-3 px-3 font-bold">${qty}</td>
+      <td class="py-3 px-3">₹${avg.toFixed(2)}</td>
+      <td class="py-3 px-3 font-bold">₹${(qty*avg).toFixed(2)}</td>
+      <td class="py-3 px-3">
+        <span class="px-2 py-0.5 rounded-md text-[10px] font-semibold ${low ? "bg-rose-50 text-rose-700" : "bg-emerald-50 text-emerald-700"}">
+          ${low ? "Low Stock" : "In Stock"}
+        </span>
       </td>
-    `;
+      <td class="py-3 px-3 text-right">
+        <button class="delete-btn text-rose-500 font-semibold text-[11px]">Remove</button>
+      </td>`;
+
+    row.querySelector(".delete-btn").addEventListener("click", () => deleteItem(item.id));
     tbody.appendChild(row);
   });
 }
 
 function renderTransactions() {
   const tbody = document.getElementById("txnTableBody");
-  const emptyMsg = document.getElementById("txnEmptyMsg");
+  const empty = document.getElementById("txnEmptyMsg");
   tbody.innerHTML = "";
 
-  const sorted = [...transactions].sort((a, b) => new Date(b.date) - new Date(a.date));
+  const sorted = [...transactions].sort((a,b) => {
+    const da = a.date && typeof a.date.toDate === "function" ? a.date.toDate() : new Date(a.date);
+    const dbb = b.date && typeof b.date.toDate === "function" ? b.date.toDate() : new Date(b.date);
+    return dbb - da;
+  });
 
-  if (sorted.length === 0) {
-    emptyMsg.classList.remove("hidden");
-  } else {
-    emptyMsg.classList.add("hidden");
-  }
+  empty.classList.toggle("hidden", sorted.length !== 0);
 
-  sorted.forEach(txn => {
-    const badge = txn.type === "IN"
-      ? `<span class="inline-flex items-center px-2 py-0.5 rounded-md text-[10px] font-bold bg-emerald-100 text-emerald-800">IN</span>`
-      : `<span class="inline-flex items-center px-2 py-0.5 rounded-md text-[10px] font-bold bg-rose-100 text-rose-800">OUT</span>`;
-    const qty = Number(txn.qty) || 0;
-    const qtyDisplay = txn.type === "IN" ? `+${qty}` : `-${qty}`;
-    const unitP = Number(txn.unitPrice) || 0;
-    const totalP = qty * unitP;
-    const locText = formatLocation(txn.floor, txn.rack, txn.box);
-
+  sorted.forEach(t => {
+    const q = Number(t.qty) || 0;
+    const p = Number(t.unitPrice) || 0;
     const row = document.createElement("tr");
-    row.className = "hover:bg-slate-50/80 transition";
+
     row.innerHTML = `
-      <td class="py-3 px-3 text-[11px] text-slate-400 whitespace-nowrap">${formatDate(txn.date)}</td>
-      <td class="py-3 px-3 font-bold text-slate-800">${escapeHtml(txn.name || "")}</td>
-      <td class="py-3 px-3">${badge}</td>
-      <td class="py-3 px-3 text-slate-600 font-medium">${escapeHtml(txn.party || "-")}</td>
-      <td class="py-3 px-3 text-[11px] text-slate-500">${escapeHtml(locText)}</td>
-      <td class="py-3 px-3 font-bold text-slate-900">${qtyDisplay}</td>
-      <td class="py-3 px-3 text-slate-500">₹${unitP.toFixed(2)}</td>
-      <td class="py-3 px-3 font-bold text-slate-800">₹${totalP.toFixed(2)}</td>
-    `;
+      <td class="py-3 px-3 text-[11px] whitespace-nowrap">${escapeHtml(formatDate(t.date))}</td>
+      <td class="py-3 px-3 font-bold">${escapeHtml(t.name)}</td>
+      <td class="py-3 px-3"><span class="px-2 py-0.5 rounded-md text-[10px] font-bold ${t.type === "IN" ? "bg-emerald-100 text-emerald-800" : "bg-rose-100 text-rose-800"}">${escapeHtml(t.type)}</span></td>
+      <td class="py-3 px-3">${escapeHtml(t.party || "-")}</td>
+      <td class="py-3 px-3 text-[11px]">${escapeHtml(formatLocation(t.floor,t.rack,t.box))}</td>
+      <td class="py-3 px-3 font-bold">${t.type === "IN" ? "+" : "-"}${q}</td>
+      <td class="py-3 px-3">₹${p.toFixed(2)}</td>
+      <td class="py-3 px-3 font-bold">₹${(q*p).toFixed(2)}</td>`;
     tbody.appendChild(row);
   });
 }
@@ -922,13 +730,13 @@ function renderAll() {
   renderTransactions();
 }
 
-/* ============ FORM SUBMIT (SAVING TO FIRESTORE) ============ */
-document.getElementById("stockForm").addEventListener("submit", async function (e) {
+/* ================= FORM / CLOUD WRITE ================= */
+document.getElementById("stockForm").addEventListener("submit", async e => {
   e.preventDefault();
 
   const user = auth.currentUser;
   if (!user) {
-    showToast("Please sign in first.", "error");
+    showToast("Please sign in with Google first.", "error");
     return;
   }
 
@@ -936,162 +744,93 @@ document.getElementById("stockForm").addEventListener("submit", async function (
   const name = document.getElementById("itemName").value.trim();
   const type = document.querySelector('input[name="txnType"]:checked').value;
   const party = document.getElementById("itemParty").value.trim();
-
   const floor = document.getElementById("itemFloor").value;
   const rack = document.getElementById("itemRack").value.trim();
   const box = document.getElementById("itemBox").value.trim();
-
   const dateVal = document.getElementById("itemDate").value;
-  const qty = Number.parseInt(document.getElementById("itemQty").value, 10);
-  const unitPrice = Number.parseFloat(document.getElementById("itemUnitPrice").value) || 0;
+  const qty = Number(document.getElementById("itemQty").value);
+  const unitPrice = Number(document.getElementById("itemUnitPrice").value);
   const notes = document.getElementById("itemNotes").value.trim();
 
-  if (!code || !name) {
-    showToast("Item code and name are required.", "error");
-    return;
-  }
+  if (!code || !name) return showToast("Item code and name are required.", "error");
+  if (!Number.isInteger(qty) || qty <= 0) return showToast("Quantity must be a whole number greater than 0.", "error");
+  if (!dateVal) return showToast("Please select a date.", "error");
+  if (!Number.isFinite(unitPrice) || unitPrice < 0) return showToast("Invalid unit price.", "error");
 
-  if (!Number.isInteger(qty) || qty <= 0) {
-    showToast("Quantity must be a whole number greater than 0.", "error");
-    return;
-  }
+  if (!(await verifyPin(type === "IN" ? "add stock" : "remove stock"))) return;
 
-  if (!Number.isFinite(unitPrice) || unitPrice < 0) {
-    showToast("Unit price must be 0 or greater.", "error");
-    return;
-  }
-
-  if (!dateVal) {
-    showToast("Please select a date.", "error");
-    return;
-  }
-
-  if (!verifyPin(type === "IN" ? "add stock" : "remove stock")) return;
-
-  const invRef = db.collection("users").doc(user.uid).collection("inventory");
-  const txnRef = db.collection("users").doc(user.uid).collection("transactions");
+  const button = document.getElementById("commitButton");
+  button.disabled = true;
+  button.textContent = "☁️ Saving...";
 
   try {
     const normalizedCode = code.toLowerCase();
-    const existingItem = inventory.find(
-      i => i.code && i.code.toLowerCase() === normalizedCode
-    );
 
-    // Use the existing inventory document when possible.
-    // New documents use a generated Firestore ID, preserving compatibility
-    // with the current database structure.
-    const invDocRef = existingItem
-      ? invRef.doc(existingItem.id)
-      : invRef.doc();
-
-    const newTxnRef = txnRef.doc();
-
-    const now = new Date();
-    const [y, m, d] = dateVal.split("-").map(Number);
-    const combinedDate = new Date(
-      y,
-      m - 1,
-      d,
-      now.getHours(),
-      now.getMinutes(),
-      now.getSeconds()
-    );
-
+    /*
+      Use a Firestore transaction so quantity cannot be corrupted
+      if two people change the same item at the same time.
+    */
     let newQty = 0;
-    let newAvgUnitPrice = 0;
-    let newTotalCost = 0;
+    let inventoryId = null;
 
-    await db.runTransaction(async (tx) => {
-      // Read the current inventory document inside the transaction.
-      const invSnap = await tx.get(invDocRef);
-      const dbItem = invSnap.exists
-        ? { id: invSnap.id, ...invSnap.data() }
-        : null;
+    await db.runTransaction(async transaction => {
+      const existing = inventory.find(i =>
+        i.code && i.code.toLowerCase() === normalizedCode
+      );
 
       if (type === "OUT") {
-        if (!dbItem) {
-          throw new Error("STOCK_NOT_FOUND");
-        }
-
-        const currentQty = Number(dbItem.qty) || 0;
-
-        if (currentQty < qty) {
-          throw new Error(`INSUFFICIENT_STOCK:${currentQty}`);
-        }
-
-        const currentAvg =
-          dbItem.avgUnitPrice !== undefined
-            ? Number(dbItem.avgUnitPrice) || 0
-            : (
-                dbItem.totalCost !== undefined && currentQty > 0
-                  ? (Number(dbItem.totalCost) || 0) / currentQty
-                  : getDerivedAvgUnitPrice(dbItem.code)
-              );
-
-        const currentTotalCost =
-          dbItem.totalCost !== undefined
-            ? Number(dbItem.totalCost) || 0
-            : currentQty * currentAvg;
+        if (!existing) throw new Error("ITEM_NOT_FOUND");
+        const currentQty = Number(existing.qty) || 0;
+        if (currentQty < qty) throw new Error(`INSUFFICIENT:${currentQty}`);
 
         newQty = currentQty - qty;
-        newTotalCost = Math.max(0, currentTotalCost - (currentAvg * qty));
-        newAvgUnitPrice = newQty > 0
-          ? newTotalCost / newQty
-          : currentAvg;
+        inventoryId = existing.id;
 
-        tx.update(invDocRef, {
+        transaction.update(INVENTORY_REF.doc(existing.id), {
           qty: newQty,
-          totalCost: Number(newTotalCost.toFixed(2)),
-          avgUnitPrice: Number(newAvgUnitPrice.toFixed(6)),
-          name,
-          floor,
-          rack,
-          box
+          updatedAt: firebase.firestore.FieldValue.serverTimestamp(),
+          updatedBy: user.uid
         });
-
       } else {
-        const currentQty = dbItem ? (Number(dbItem.qty) || 0) : 0;
+        if (existing) {
+          const currentQty = Number(existing.qty) || 0;
+          newQty = currentQty + qty;
+          inventoryId = existing.id;
 
-        const currentTotalCost = dbItem
-          ? (
-              dbItem.totalCost !== undefined
-                ? Number(dbItem.totalCost) || 0
-                : currentQty * getDerivedAvgUnitPrice(dbItem.code)
-            )
-          : 0;
-
-        newQty = currentQty + qty;
-        newTotalCost = currentTotalCost + (qty * unitPrice);
-        newAvgUnitPrice = newQty > 0
-          ? newTotalCost / newQty
-          : 0;
-
-        const inventoryData = {
-          code,
-          name,
-          qty: Number(newQty),
-          floor,
-          rack,
-          box,
-          unitPrice: Number(unitPrice),
-          avgUnitPrice: Number(newAvgUnitPrice.toFixed(6)),
-          totalCost: Number(newTotalCost.toFixed(2)),
-          updatedAt: firebase.firestore.FieldValue.serverTimestamp()
-        };
-
-        if (dbItem) {
-          tx.update(invDocRef, inventoryData);
+          transaction.update(INVENTORY_REF.doc(existing.id), {
+            qty: newQty,
+            name,
+            floor,
+            rack,
+            box,
+            unitPrice,
+            updatedAt: firebase.firestore.FieldValue.serverTimestamp(),
+            updatedBy: user.uid
+          });
         } else {
-          tx.set(invDocRef, {
-            ...inventoryData,
-            createdAt: firebase.firestore.FieldValue.serverTimestamp()
+          const ref = INVENTORY_REF.doc();
+          inventoryId = ref.id;
+          newQty = qty;
+
+          transaction.set(ref, {
+            code,
+            name,
+            qty,
+            floor,
+            rack,
+            box,
+            unitPrice,
+            createdAt: firebase.firestore.FieldValue.serverTimestamp(),
+            updatedAt: firebase.firestore.FieldValue.serverTimestamp(),
+            createdBy: user.uid,
+            updatedBy: user.uid
           });
         }
       }
 
-      // Store the transaction log in the SAME atomic operation.
-      tx.set(newTxnRef, {
-        date: combinedDate.toISOString(),
+      const txnRef = TRANSACTIONS_REF.doc();
+      transaction.set(txnRef, {
+        date: firebase.firestore.Timestamp.fromDate(new Date(dateVal + "T12:00:00")),
         code,
         name,
         type,
@@ -1099,78 +838,69 @@ document.getElementById("stockForm").addEventListener("submit", async function (
         floor,
         rack,
         box,
-        qty: Number(qty),
-        unitPrice: Number(unitPrice),
+        qty,
+        unitPrice,
         notes,
-        createdAt: firebase.firestore.FieldValue.serverTimestamp()
+        inventoryId,
+        createdAt: firebase.firestore.FieldValue.serverTimestamp(),
+        createdBy: user.uid,
+        createdByEmail: user.email || ""
       });
     });
 
-    console.log("[StockKeeper] Cloud save successful:", {
-      code,
-      type,
-      qty,
-      newQty,
-      newTotalCost
-    });
+    showToast(type === "IN"
+      ? `Stock IN saved: ${qty} × ${name}`
+      : `Stock OUT saved: ${qty} × ${name}`, "success");
 
-    showToast(
-      type === "IN"
-        ? `Stocked IN ${qty} × ${name}`
-        : `Stocked OUT ${qty} × ${name}`,
-      "success"
-    );
-
-    // Email alert is intentionally outside the Firestore transaction.
-    // A failure here must not roll back a successful stock movement.
     if (newQty <= LOW_STOCK_THRESHOLD) {
-      try {
-        if (typeof emailjs !== "undefined") {
-          sendLowStockEmail(name, code, newQty);
-        }
-      } catch (err) {
-        console.error("[StockKeeper] EmailJS error:", err);
-      }
+      sendLowStockEmail(name, code, newQty);
     }
 
     document.getElementById("stockForm").reset();
     document.getElementById("itemQty").value = 1;
     document.getElementById("itemUnitPrice").value = "0.00";
-    calculateTotal();
-    setTodayDate();
     document.querySelector('input[name="txnType"][value="IN"]').checked = true;
     updatePartyLabel();
+    setTodayDate();
+    calculateTotal();
     document.getElementById("itemCode").focus();
 
   } catch (error) {
-    console.error("[StockKeeper] Cloud save failed:", error);
+    console.error("Cloud save failed:", error);
 
-    if (error.message === "STOCK_NOT_FOUND") {
-      showToast("This product does not exist in inventory.", "error");
-    } else if (error.message && error.message.startsWith("INSUFFICIENT_STOCK:")) {
-      const available = error.message.split(":")[1];
-      showToast(
-        `Insufficient stock! Available: ${available}, Requested: ${qty}`,
-        "error"
-      );
-    } else if (error.code === "permission-denied") {
-      showToast(
-        "Firestore permission denied. Check your Firestore Security Rules.",
-        "error"
-      );
-    } else if (error.code === "unauthenticated") {
-      showToast("Your Google session expired. Please sign in again.", "error");
+    if (error.message === "ITEM_NOT_FOUND") {
+      showToast("Cannot remove stock: item does not exist.", "error");
+    } else if (error.message.startsWith("INSUFFICIENT:")) {
+      showToast(`Insufficient stock. Available: ${error.message.split(":")[1]}`, "error");
     } else {
-      showToast(
-        `Cloud save failed: ${error.code || error.message || "unknown error"}`,
-        "error"
-      );
+      showToast("Cloud save failed: " + getFirebaseError(error), "error");
     }
+  } finally {
+    button.disabled = false;
+    button.textContent = "☁️ Commit to Cloud";
   }
 });
 
+/* ================= LOW STOCK EMAIL ================= */
+function sendLowStockEmail(itemName, itemCode, currentQty) {
+  if (typeof emailjs === "undefined") return;
 
-/* ============ AUTOCOMPLETE ============ */
+  const serviceID = "service_jdnsri6";
+  const templateID = "template_0dpp4zi";
+
+  emailjs.send(serviceID, templateID, {
+    item_name: itemName,
+    item_code: itemCode,
+    current_qty: currentQty
+  }).then(() => {
+    showToast(`Low-stock alert sent for ${itemName}.`, "info");
+  }).catch(error => {
+    console.error("EmailJS error:", error);
+    showToast("Stock saved, but low-stock email failed.", "error");
+  });
+}
+
+/* ================= AUTOCOMPLETE ================= */
 const codeInput = document.getElementById("itemCode");
 const nameInput = document.getElementById("itemName");
 const suggestionsBox = document.getElementById("codeSuggestions");
@@ -1178,187 +908,204 @@ const suggestionsBox = document.getElementById("codeSuggestions");
 codeInput.addEventListener("input", () => {
   const val = codeInput.value.trim().toLowerCase();
   suggestionsBox.innerHTML = "";
+
   if (!val) {
     suggestionsBox.classList.add("hidden");
     return;
   }
-  const matches = inventory.filter(i => (i.code && i.code.toLowerCase().includes(val)) || (i.name && i.name.toLowerCase().includes(val))).slice(0, 6);
-  if (matches.length === 0) {
+
+  const matches = inventory.filter(i =>
+    String(i.code || "").toLowerCase().includes(val) ||
+    String(i.name || "").toLowerCase().includes(val)
+  ).slice(0, 8);
+
+  if (!matches.length) {
     suggestionsBox.classList.add("hidden");
     return;
   }
+
   matches.forEach(m => {
     const div = document.createElement("div");
-    div.className = "px-3.5 py-2 hover:bg-slate-50 cursor-pointer text-xs flex justify-between items-center transition border-b border-slate-100 last:border-0";
-    div.innerHTML = `<span class="font-mono text-slate-400 font-bold">${escapeHtml(m.code || "")}</span><span class="font-semibold text-slate-800">${escapeHtml(m.name || "")}</span>`;
+    div.className = "px-3.5 py-2 hover:bg-slate-50 cursor-pointer text-xs flex justify-between gap-3 border-b";
+
+    const left = document.createElement("span");
+    left.className = "font-mono text-slate-400 font-bold";
+    left.textContent = m.code || "";
+
+    const right = document.createElement("span");
+    right.className = "font-semibold text-slate-800";
+    right.textContent = m.name || "";
+
+    div.append(left,right);
+
     div.onclick = () => {
       codeInput.value = m.code || "";
       nameInput.value = m.name || "";
-      if (m.floor) document.getElementById("itemFloor").value = m.floor;
-      if (m.rack) document.getElementById("itemRack").value = m.rack;
-      if (m.box) document.getElementById("itemBox").value = m.box;
-      const lastPrice = getDerivedAvgUnitPrice(m.code);
-      document.getElementById("itemUnitPrice").value = lastPrice.toFixed(2);
+      document.getElementById("itemFloor").value = m.floor || "Ground Floor";
+      document.getElementById("itemRack").value = m.rack || "";
+      document.getElementById("itemBox").value = m.box || "";
+      document.getElementById("itemUnitPrice").value = getDerivedAvgUnitPrice(m.code).toFixed(2);
       calculateTotal();
       suggestionsBox.classList.add("hidden");
     };
+
     suggestionsBox.appendChild(div);
   });
+
   suggestionsBox.classList.remove("hidden");
 });
 
 codeInput.addEventListener("blur", () => {
   setTimeout(() => suggestionsBox.classList.add("hidden"), 150);
-  const exact = inventory.find(i => i.code && i.code.toLowerCase() === codeInput.value.trim().toLowerCase());
+
+  const exact = inventory.find(i =>
+    i.code && i.code.toLowerCase() === codeInput.value.trim().toLowerCase()
+  );
+
   if (exact) {
     nameInput.value = exact.name || "";
-    if (exact.floor) document.getElementById("itemFloor").value = exact.floor;
-    if (exact.rack) document.getElementById("itemRack").value = exact.rack;
-    if (exact.box) document.getElementById("itemBox").value = exact.box;
-    const lastPrice = getDerivedAvgUnitPrice(exact.code);
-    document.getElementById("itemUnitPrice").value = lastPrice.toFixed(2);
+    document.getElementById("itemFloor").value = exact.floor || "Ground Floor";
+    document.getElementById("itemRack").value = exact.rack || "";
+    document.getElementById("itemBox").value = exact.box || "";
+    document.getElementById("itemUnitPrice").value = getDerivedAvgUnitPrice(exact.code).toFixed(2);
     calculateTotal();
   }
 });
 
-document.addEventListener("click", (e) => {
-  if (!suggestionsBox.contains(e.target) && e.target !== codeInput) {
-    suggestionsBox.classList.add("hidden");
-  }
-});
-
-document.getElementById("searchInventory").addEventListener("input", (e) => {
+document.getElementById("searchInventory").addEventListener("input", e => {
   renderInventory(e.target.value);
 });
 
-/* ============ DELETE ITEM FROM FIRESTORE ============ */
+/* ================= DELETE ================= */
 async function deleteItem(docId) {
-  const user = auth.currentUser;
-  if (!user) return;
-
-  if (!verifyPin("delete item")) return;
-  if (!confirm("Delete item from inventory cloud database?")) return;
+  if (!auth.currentUser) return;
+  if (!(await verifyPin("delete this item"))) return;
+  if (!confirm("Delete this item from the shared cloud inventory?")) return;
 
   try {
-    await db.collection("users").doc(user.uid).collection("inventory").doc(docId).delete();
-    showToast("Item deleted from cloud database.", "info");
+    await INVENTORY_REF.doc(docId).delete();
+    showToast("Item deleted from cloud.", "info");
   } catch (error) {
-    console.error("Delete error:", error);
-    showToast("Failed to delete item from cloud.", "error");
+    console.error(error);
+    showToast("Delete failed: " + getFirebaseError(error), "error");
   }
 }
 
-/* ============ CSV EXPORT & BACKUP ============ */
+/* ================= CSV / BACKUP ================= */
 function downloadCSV(filename, rows) {
-  const csvContent = rows.map(row =>
-    row.map(cell => `"${String(cell).replace(/"/g, '""')}"`).join(",")
+  const csv = rows.map(row =>
+    row.map(cell => `"${String(cell ?? "").replace(/"/g,'""')}"`).join(",")
   ).join("\n");
-  const blob = new Blob([csvContent], { type: "text/csv;charset=utf-8;" });
+
+  const blob = new Blob(["\uFEFF" + csv], {type:"text/csv;charset=utf-8;"});
   const url = URL.createObjectURL(blob);
   const a = document.createElement("a");
   a.href = url;
   a.download = filename;
   document.body.appendChild(a);
   a.click();
-  document.body.removeChild(a);
+  a.remove();
   URL.revokeObjectURL(url);
 }
 
 function exportInventoryCSV() {
-  const rows = [["Item Code", "Item Name", "Floor", "Rack No", "Box No", "Quantity", "Avg Price/Unit (INR)", "Total Value (INR)", "Status"]];
+  const rows = [["Item Code","Item Name","Floor","Rack","Box","Quantity","Avg Price","Total Value","Status"]];
+
   inventory.forEach(i => {
-    const avgP = getDerivedAvgUnitPrice(i.code);
-    const qty = Number(i.qty) || 0;
-    rows.push([i.code, i.name, i.floor || "-", i.rack || "-", i.box || "-", qty, avgP.toFixed(2), (qty * avgP).toFixed(2), qty <= LOW_STOCK_THRESHOLD ? "Low Stock" : "In Stock"]);
+    const q = Number(i.qty) || 0;
+    const p = getDerivedAvgUnitPrice(i.code);
+    rows.push([i.code,i.name,i.floor||"-",i.rack||"-",i.box||"-",q,p.toFixed(2),(q*p).toFixed(2),q<LOW_STOCK_THRESHOLD?"Low Stock":"In Stock"]);
   });
+
   downloadCSV(`inventory_export_${dateStamp()}.csv`, rows);
-  showToast("Inventory exported to CSV.", "success");
+  showToast("Inventory exported.", "success");
 }
 
 function exportTransactionsCSV() {
-  const rows = [["Date", "Item Code", "Item Name", "Type", "Supplier / Customer", "Floor", "Rack No", "Box No", "Quantity", "Unit Price (INR)", "Total Amount (INR)", "Notes"]];
-  [...transactions].sort((a, b) => new Date(b.date) - new Date(a.date)).forEach(t => {
-    const uPrice = Number(t.unitPrice) || 0;
-    const qty = Number(t.qty) || 0;
-    rows.push([formatDate(t.date), t.code, t.name, t.type, t.party || "-", t.floor || "-", t.rack || "-", t.box || "-", qty, uPrice.toFixed(2), (qty * uPrice).toFixed(2), t.notes || ""]);
+  const rows = [["Date","Item Code","Item Name","Type","Supplier / Customer","Floor","Rack","Box","Quantity","Unit Price","Total","Notes"]];
+
+  transactions.forEach(t => {
+    const q = Number(t.qty)||0;
+    const p = Number(t.unitPrice)||0;
+    rows.push([formatDate(t.date),t.code,t.name,t.type,t.party||"-",t.floor||"-",t.rack||"-",t.box||"-",q,p.toFixed(2),(q*p).toFixed(2),t.notes||""]);
   });
+
   downloadCSV(`transactions_export_${dateStamp()}.csv`, rows);
-  showToast("Transaction log exported to CSV.", "success");
+  showToast("Transaction logs exported.", "success");
+}
+
+function downloadPeriodReportCSV() {
+  const txns = getFilteredReportTransactions();
+
+  if (!txns.length) {
+    showToast("No transactions in selected period.", "info");
+    return;
+  }
+
+  const rows = [["Date","Item Code","Item Name","Type","Supplier / Customer","Floor","Rack","Box","Quantity","Unit Price","Total","Notes"]];
+
+  txns.forEach(t => {
+    const q=Number(t.qty)||0, p=Number(t.unitPrice)||0;
+    rows.push([formatDate(t.date),t.code,t.name,t.type,t.party||"-",t.floor||"-",t.rack||"-",t.box||"-",q,p.toFixed(2),(q*p).toFixed(2),t.notes||""]);
+  });
+
+  downloadCSV(`period_report_${dateStamp()}.csv`, rows);
+  showToast("Period report exported.", "success");
 }
 
 function backupJSON() {
-  const data = { inventory, transactions, exportedAt: new Date().toISOString() };
-  const blob = new Blob([JSON.stringify(data, null, 2)], { type: "application/json" });
+  const data = {
+    storeId: STORE_ID,
+    inventory,
+    transactions,
+    exportedAt: new Date().toISOString()
+  };
+
+  const blob = new Blob([JSON.stringify(data,null,2)], {type:"application/json"});
   const url = URL.createObjectURL(blob);
   const a = document.createElement("a");
-  a.href = url;
-  a.download = `stockkeeper_backup_${dateStamp()}.json`;
+  a.href=url;
+  a.download=`stockkeeper_backup_${dateStamp()}.json`;
   document.body.appendChild(a);
   a.click();
-  document.body.removeChild(a);
+  a.remove();
   URL.revokeObjectURL(url);
-  showToast("Database backup downloaded.", "success");
+  showToast("Backup downloaded.", "success");
 }
 
 async function resetAppData() {
-  const user = auth.currentUser;
-  if (!user) return;
-  if (!verifyPin("reset all application data")) return;
-  if (!confirm("This will PERMANENTLY ERASE all inventory and transaction records from the cloud. Continue?")) return;
+  if (!auth.currentUser) return;
+  if (!(await verifyPin("reset ALL application data"))) return;
+
+  if (!confirm("PERMANENTLY DELETE ALL INVENTORY AND TRANSACTION DATA?")) return;
 
   try {
-    const invSnap = await db.collection("users").doc(user.uid).collection("inventory").get();
-    const txnSnap = await db.collection("users").doc(user.uid).collection("transactions").get();
+    const [invSnap, txnSnap] = await Promise.all([
+      INVENTORY_REF.get(),
+      TRANSACTIONS_REF.get()
+    ]);
 
-    const batch = db.batch();
-    invSnap.forEach(doc => batch.delete(doc.ref));
-    txnSnap.forEach(doc => batch.delete(doc.ref));
+    const refs = [];
+    invSnap.forEach(doc => refs.push(doc.ref));
+    txnSnap.forEach(doc => refs.push(doc.ref));
 
-    await batch.commit();
-    showToast("System cloud database reset.", "info");
+    while (refs.length) {
+      const batch = db.batch();
+      refs.splice(0, 450).forEach(ref => batch.delete(ref));
+      await batch.commit();
+    }
+
+    showToast("Cloud database reset.", "info");
   } catch (error) {
-    console.error("Reset error:", error);
-    showToast("Failed to reset database.", "error");
+    console.error(error);
+    showToast("Reset failed: " + getFirebaseError(error), "error");
   }
 }
 
-/* ============ HELPERS ============ */
-function escapeHtml(str) {
-  const div = document.createElement("div");
-  div.textContent = str;
-  return div.innerHTML;
-}
-
-function formatDate(iso) {
-  if (!iso) return "N/A";
-  const d = new Date(iso);
-  return d.toLocaleString(undefined, {
-    year: "numeric", month: "short", day: "2-digit",
-    hour: "2-digit", minute: "2-digit"
-  });
-}
-
-function dateStamp() {
-  const d = new Date();
-  return `${d.getFullYear()}${String(d.getMonth() + 1).padStart(2, "0")}${String(d.getDate()).padStart(2, "0")}_${String(d.getHours()).padStart(2, "0")}${String(d.getMinutes()).padStart(2, "0")}`;
-}
-
-function setTodayDate() {
-  const today = new Date();
-  const yyyy = today.getFullYear();
-  const mm = String(today.getMonth() + 1).padStart(2, "0");
-  const dd = String(today.getDate()).padStart(2, "0");
-  document.getElementById("itemDate").value = `${yyyy}-${mm}-${dd}`;
-  document.getElementById("reportStartDate").value = `${yyyy}-${mm}-01`;
-  document.getElementById("reportEndDate").value = `${yyyy}-${mm}-${dd}`;
-}
-
-/* ============ BOOTSTRAP ============ */
-console.log("[StockKeeper] Fixed cloud inventory build loaded.");
+/* ================= BOOT ================= */
 setTodayDate();
 calculateTotal();
 updatePartyLabel();
 </script>
-
 </body>
 </html>
