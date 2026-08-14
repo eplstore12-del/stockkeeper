@@ -765,41 +765,53 @@ document.getElementById("stockForm").addEventListener("submit", async e => {
 
   try {
     const normalizedCode = code.toLowerCase();
-
-    /*
-      Use a Firestore transaction so quantity cannot be corrupted
-      if two people change the same item at the same time.
-    */
     let newQty = 0;
     let inventoryId = null;
 
+    /*
+      IMPORTANT FIX:
+      Do NOT use the locally cached inventory array to decide whether
+      a Firestore document exists. The cache can be stale, and that can
+      make transaction.update() fail with "Requested document was not found".
+
+      Instead, read the current Firestore document INSIDE the transaction.
+    */
     await db.runTransaction(async transaction => {
-      const existing = inventory.find(i =>
-        i.code && i.code.toLowerCase() === normalizedCode
-      );
+      const query = INVENTORY_REF
+        .where("codeLower", "==", normalizedCode)
+        .limit(1);
+
+      const querySnapshot = await transaction.get(query);
+      const existingDoc = querySnapshot.empty ? null : querySnapshot.docs[0];
+      const existingData = existingDoc ? existingDoc.data() : null;
 
       if (type === "OUT") {
-        if (!existing) throw new Error("ITEM_NOT_FOUND");
-        const currentQty = Number(existing.qty) || 0;
-        if (currentQty < qty) throw new Error(`INSUFFICIENT:${currentQty}`);
+        if (!existingDoc) throw new Error("ITEM_NOT_FOUND");
+
+        const currentQty = Number(existingData.qty) || 0;
+        if (currentQty < qty) {
+          throw new Error(`INSUFFICIENT:${currentQty}`);
+        }
 
         newQty = currentQty - qty;
-        inventoryId = existing.id;
+        inventoryId = existingDoc.id;
 
-        transaction.update(INVENTORY_REF.doc(existing.id), {
+        transaction.update(existingDoc.ref, {
           qty: newQty,
           updatedAt: firebase.firestore.FieldValue.serverTimestamp(),
           updatedBy: user.uid
         });
       } else {
-        if (existing) {
-          const currentQty = Number(existing.qty) || 0;
+        if (existingDoc) {
+          const currentQty = Number(existingData.qty) || 0;
           newQty = currentQty + qty;
-          inventoryId = existing.id;
+          inventoryId = existingDoc.id;
 
-          transaction.update(INVENTORY_REF.doc(existing.id), {
-            qty: newQty,
+          transaction.update(existingDoc.ref, {
+            code,
+            codeLower: normalizedCode,
             name,
+            qty: newQty,
             floor,
             rack,
             box,
@@ -814,6 +826,7 @@ document.getElementById("stockForm").addEventListener("submit", async e => {
 
           transaction.set(ref, {
             code,
+            codeLower: normalizedCode,
             name,
             qty,
             floor,
@@ -830,8 +843,9 @@ document.getElementById("stockForm").addEventListener("submit", async e => {
 
       const txnRef = TRANSACTIONS_REF.doc();
       transaction.set(txnRef, {
-        date: firebase.firestore.Timestamp.fromDate(new Date(dateVal + "T12:00:00")),
+        date: firebase.firestore.Timestamp.fromDate(new Date(`${dateVal}T12:00:00`)),
         code,
+        codeLower: normalizedCode,
         name,
         type,
         party,
@@ -848,57 +862,46 @@ document.getElementById("stockForm").addEventListener("submit", async e => {
       });
     });
 
-    showToast(type === "IN"
-      ? `Stock IN saved: ${qty} × ${name}`
-      : `Stock OUT saved: ${qty} × ${name}`, "success");
+    showToast(
+      type === "IN"
+        ? `Stocked IN ${qty} × ${name}`
+        : `Stocked OUT ${qty} × ${name}`,
+      "success"
+    );
 
-    if (newQty <= LOW_STOCK_THRESHOLD) {
-      sendLowStockEmail(name, code, newQty);
+    if (newQty <= LOW_STOCK_THRESHOLD && typeof emailjs !== "undefined") {
+      try {
+        sendLowStockEmail(name, code, newQty);
+      } catch (emailError) {
+        console.error("EmailJS error:", emailError);
+      }
     }
 
     document.getElementById("stockForm").reset();
     document.getElementById("itemQty").value = 1;
     document.getElementById("itemUnitPrice").value = "0.00";
+    calculateTotal();
+    setTodayDate();
     document.querySelector('input[name="txnType"][value="IN"]').checked = true;
     updatePartyLabel();
-    setTodayDate();
-    calculateTotal();
     document.getElementById("itemCode").focus();
 
   } catch (error) {
     console.error("Cloud save failed:", error);
 
     if (error.message === "ITEM_NOT_FOUND") {
-      showToast("Cannot remove stock: item does not exist.", "error");
-    } else if (error.message.startsWith("INSUFFICIENT:")) {
-      showToast(`Insufficient stock. Available: ${error.message.split(":")[1]}`, "error");
+      showToast("This item is not in inventory. Add it with Stock IN first.", "error");
+    } else if (error.message && error.message.startsWith("INSUFFICIENT:")) {
+      const available = error.message.split(":")[1];
+      showToast(`Insufficient stock. Available: ${available}`, "error");
     } else {
       showToast("Cloud save failed: " + getFirebaseError(error), "error");
     }
   } finally {
     button.disabled = false;
-    button.textContent = "☁️ Commit to Cloud";
+    button.textContent = "☁️ COMMIT TO CLOUD";
   }
 });
-
-/* ================= LOW STOCK EMAIL ================= */
-function sendLowStockEmail(itemName, itemCode, currentQty) {
-  if (typeof emailjs === "undefined") return;
-
-  const serviceID = "service_jdnsri6";
-  const templateID = "template_0dpp4zi";
-
-  emailjs.send(serviceID, templateID, {
-    item_name: itemName,
-    item_code: itemCode,
-    current_qty: currentQty
-  }).then(() => {
-    showToast(`Low-stock alert sent for ${itemName}.`, "info");
-  }).catch(error => {
-    console.error("EmailJS error:", error);
-    showToast("Stock saved, but low-stock email failed.", "error");
-  });
-}
 
 /* ================= AUTOCOMPLETE ================= */
 const codeInput = document.getElementById("itemCode");
