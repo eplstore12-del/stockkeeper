@@ -3,270 +3,269 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>StockKeeper Pro - Inventory Management System</title>
-
+<title>StockKeeper Enterprise</title>
 <script src="https://cdn.tailwindcss.com"></script>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
 
-<!-- Firebase v10 Compat -->
 <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-app-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-auth-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore-compat.js"></script>
 
-<!-- EmailJS -->
 <script src="https://cdn.jsdelivr.net/npm/@emailjs/browser@3/dist/email.min.js"></script>
-<script>
-(function () {
-  try {
-    emailjs.init("l51hBXXZZPYhmMBSo");
-  } catch (e) {
-    console.warn("EmailJS initialization failed:", e);
-  }
-})();
-</script>
 
 <style>
-body { font-family: 'Plus Jakarta Sans', sans-serif; }
-.font-mono { font-family: 'JetBrains Mono', monospace; }
-::-webkit-scrollbar { height: 6px; width: 6px; }
-::-webkit-scrollbar-track { background: #f1f5f9; }
-::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 9999px; }
-.toast { animation: slideIn .3s ease, fadeOut .3s ease 2.7s forwards; }
-@keyframes slideIn { from { transform: translateY(-20px) scale(.95); opacity:0 } to { transform:translateY(0) scale(1); opacity:1 } }
-@keyframes fadeOut { to { opacity:0; transform:translateY(-20px) scale(.95) } }
-.autocomplete-list { max-height:220px; overflow-y:auto; }
+body{font-family:'Plus Jakarta Sans',sans-serif}
+.font-mono{font-family:'JetBrains Mono',monospace}
+::-webkit-scrollbar{height:6px;width:6px}
+::-webkit-scrollbar-track{background:#f1f5f9}
+::-webkit-scrollbar-thumb{background:#cbd5e1;border-radius:9999px}
+.toast{animation:slideIn .25s ease,fadeOut .3s ease 3.7s forwards}
+@keyframes slideIn{from{transform:translateY(-15px);opacity:0}to{transform:none;opacity:1}}
+@keyframes fadeOut{to{opacity:0;transform:translateY(-10px)}}
 </style>
 </head>
 
-<body class="bg-slate-50 min-h-screen text-slate-800 antialiased">
-<div id="toastContainer" class="fixed top-5 right-5 z-50 flex flex-col gap-2.5 w-80"></div>
+<body class="bg-slate-50 text-slate-800 min-h-screen">
 
-<div class="flex min-h-screen">
-<aside class="w-64 bg-slate-900 text-slate-300 flex flex-col shrink-0 border-r border-slate-800">
-  <div class="p-5 border-b border-slate-800 flex items-center gap-3">
-    <div class="bg-gradient-to-tr from-indigo-600 to-violet-500 text-white rounded-xl w-10 h-10 flex items-center justify-center font-extrabold text-xl">SK</div>
-    <div>
-      <h1 class="text-base font-bold text-white">StockKeeper Pro</h1>
-      <p class="text-[11px] text-slate-400 uppercase tracking-wider">Cloud Inventory</p>
-    </div>
-  </div>
+<div id="toastContainer" class="fixed top-5 right-5 z-[100] w-80 space-y-2"></div>
 
-  <div class="p-4 space-y-1.5 flex-1 overflow-y-auto">
-    <div class="text-[10px] font-bold text-slate-500 uppercase tracking-wider px-3 mb-2">Management</div>
-
-    <button onclick="changeAppPin()" class="w-full text-left flex items-center gap-2.5 px-3 py-2 rounded-lg text-xs font-semibold hover:bg-slate-800 hover:text-white">
-      🔑 Security PIN
-    </button>
-
-    <button onclick="exportInventoryCSV()" class="w-full text-left flex items-center gap-2.5 px-3 py-2 rounded-lg text-xs font-semibold text-emerald-400 hover:bg-emerald-500/10">
-      📊 Export Inventory CSV
-    </button>
-
-    <button onclick="exportTransactionsCSV()" class="w-full text-left flex items-center gap-2.5 px-3 py-2 rounded-lg text-xs font-semibold text-emerald-400 hover:bg-emerald-500/10">
-      🧾 Export Logs CSV
-    </button>
-
-    <div class="text-[10px] font-bold text-slate-500 uppercase tracking-wider px-3 pt-4 mb-2">Data</div>
-
-    <button onclick="backupJSON()" class="w-full text-left flex items-center gap-2.5 px-3 py-2 rounded-lg text-xs font-semibold hover:bg-slate-800 hover:text-white">
-      💾 Backup Database
-    </button>
-
-    <button onclick="resetAppData()" class="w-full text-left flex items-center gap-2.5 px-3 py-2 rounded-lg text-xs font-semibold text-rose-400 hover:bg-rose-500/10">
-      🗑 Purge System Data
-    </button>
-  </div>
-
-  <div class="p-4 border-t border-slate-800 bg-slate-950/50">
-    <div id="authButtonContainer"></div>
-  </div>
-</aside>
-
-<div class="flex-1 flex flex-col min-w-0 overflow-hidden">
-<header class="bg-white border-b border-slate-200 px-8 py-4 flex items-center justify-between sticky top-0 z-20">
-  <div>
-    <h2 class="text-xl font-bold text-slate-900">Inventory & Operations Dashboard</h2>
-    <p class="text-xs text-slate-500">Shared real-time cloud inventory</p>
-  </div>
-  <span id="syncStatus" class="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-semibold bg-slate-100 text-slate-600 border">
-    <span class="w-1.5 h-1.5 rounded-full bg-slate-400"></span> Connecting...
-  </span>
-</header>
-
-<main id="mainAppContent" class="p-8 space-y-8 overflow-y-auto hidden">
-
-<div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-5">
-  <div class="bg-white rounded-xl p-5 border shadow-sm">
-    <span class="text-xs font-semibold uppercase tracking-wider text-slate-500">Total Products</span>
-    <p id="metricTotalItems" class="text-3xl font-bold mt-3">0</p>
-  </div>
-  <div class="bg-white rounded-xl p-5 border shadow-sm">
-    <span class="text-xs font-semibold uppercase tracking-wider text-slate-500">Stock Alerts</span>
-    <p id="metricLowStock" class="text-3xl font-bold text-rose-600 mt-3">0</p>
-  </div>
-  <div class="bg-white rounded-xl p-5 border shadow-sm">
-    <span class="text-xs font-semibold uppercase tracking-wider text-slate-500">Total Quantity</span>
-    <p id="metricTotalUnits" class="text-3xl font-bold text-emerald-600 mt-3">0</p>
-  </div>
-  <div class="bg-white rounded-xl p-5 border shadow-sm">
-    <span class="text-xs font-semibold uppercase tracking-wider text-slate-500">Portfolio Valuation</span>
-    <p id="metricTotalValue" class="text-3xl font-bold mt-3">₹0.00</p>
-  </div>
-</div>
-
-<div class="bg-white rounded-2xl border p-6 shadow-sm">
-  <div class="flex flex-wrap items-center justify-between gap-4 pb-5 mb-5 border-b">
-    <div>
-      <h3 class="text-base font-bold">📈 Financial Summary & Movements</h3>
-      <p class="text-xs text-slate-500">Stock IN and OUT movement summary</p>
+<!-- VIEWER PAGE -->
+<div id="viewerPage" class="hidden min-h-screen">
+  <div class="max-w-6xl mx-auto p-5 md:p-8">
+    <div class="bg-white border border-slate-200 rounded-2xl p-5 md:p-6 shadow-sm mb-6">
+      <div class="flex flex-wrap items-center justify-between gap-4">
+        <div>
+          <div class="text-xs font-bold uppercase tracking-widest text-indigo-600">StockKeeper</div>
+          <h1 class="text-2xl font-extrabold text-slate-900 mt-1">Inventory Viewer</h1>
+          <p class="text-xs text-slate-500 mt-1">Read-only inventory shared by the store owner.</p>
+        </div>
+        <div class="text-xs font-semibold px-3 py-2 rounded-xl bg-emerald-50 text-emerald-700 border border-emerald-200">
+          READ ONLY
+        </div>
+      </div>
     </div>
 
-    <div class="flex flex-wrap items-center gap-2.5">
-      <select id="reportRangeSelect" onchange="toggleCustomDateInputs();renderReports()" class="border rounded-xl text-xs font-semibold px-3 py-2">
-        <option value="month">This Month</option>
-        <option value="6months">Last 6 Months</option>
-        <option value="12months" selected>Last 12 Months</option>
-        <option value="all">All Time</option>
-        <option value="custom">Custom Range</option>
-      </select>
-
-      <div id="customDateRangeContainer" class="hidden flex items-center gap-2">
-        <input id="reportStartDate" type="date" onchange="renderReports()" class="border rounded-xl text-xs px-2.5 py-1.5">
-        <span class="text-xs text-slate-400">to</span>
-        <input id="reportEndDate" type="date" onchange="renderReports()" class="border rounded-xl text-xs px-2.5 py-1.5">
+    <div class="bg-white border border-slate-200 rounded-2xl p-5 shadow-sm">
+      <div class="flex flex-wrap items-center justify-between gap-3 mb-5">
+        <div>
+          <h2 class="font-bold text-slate-900">Active Inventory</h2>
+          <p id="viewerCount" class="text-xs text-slate-500 mt-1">Loading...</p>
+        </div>
+        <input id="viewerSearch" type="text"
+          placeholder="Search name, model, part number, SKU..."
+          class="w-full md:w-96 px-4 py-2.5 border border-slate-200 rounded-xl text-sm outline-none focus:ring-2 focus:ring-indigo-500">
       </div>
 
-      <button onclick="downloadPeriodReportCSV()" class="text-xs bg-indigo-600 hover:bg-indigo-700 text-white font-semibold px-4 py-2 rounded-xl">
-        📥 Export Period Report
-      </button>
-    </div>
-  </div>
+      <div id="viewerError" class="hidden bg-rose-50 border border-rose-200 text-rose-700 rounded-xl p-4 text-sm font-semibold mb-4"></div>
 
-  <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
-    <div class="bg-slate-50 p-4 rounded-xl border">
-      <span class="text-[11px] font-bold uppercase tracking-wider text-slate-400">Total Purchases</span>
-      <p id="reportSpent" class="text-2xl font-bold text-emerald-600 mt-1">₹0.00</p>
-      <p id="reportUnitsIn" class="text-xs text-slate-500 mt-0.5">0 units added</p>
-    </div>
-    <div class="bg-slate-50 p-4 rounded-xl border">
-      <span class="text-[11px] font-bold uppercase tracking-wider text-slate-400">Outflow Value</span>
-      <p id="reportOutValue" class="text-2xl font-bold text-rose-600 mt-1">₹0.00</p>
-      <p id="reportUnitsOut" class="text-xs text-slate-500 mt-0.5">0 units removed</p>
-    </div>
-    <div class="bg-slate-50 p-4 rounded-xl border">
-      <span class="text-[11px] font-bold uppercase tracking-wider text-slate-400">Net Movement</span>
-      <p id="reportNetValue" class="text-2xl font-bold text-indigo-600 mt-1">₹0.00</p>
-      <p id="reportTxnCount" class="text-xs text-slate-500 mt-0.5">0 transactions</p>
+      <div class="overflow-x-auto border border-slate-100 rounded-xl">
+        <table class="w-full text-left text-xs">
+          <thead class="bg-slate-50 border-b border-slate-200 text-slate-500 uppercase tracking-wider">
+            <tr>
+              <th class="p-3">SKU</th>
+              <th class="p-3">Product</th>
+              <th class="p-3">Model</th>
+              <th class="p-3">Part Number</th>
+              <th class="p-3">Location</th>
+              <th class="p-3">Qty</th>
+              <th class="p-3">Status</th>
+            </tr>
+          </thead>
+          <tbody id="viewerTableBody" class="divide-y divide-slate-100"></tbody>
+        </table>
+      </div>
     </div>
   </div>
 </div>
 
-<div class="grid grid-cols-1 lg:grid-cols-12 gap-8">
-<div class="lg:col-span-4">
-<div class="bg-white rounded-2xl border p-6 shadow-sm lg:sticky lg:top-24">
-<h3 class="font-bold mb-4 pb-4 border-b">⚡ Record Stock Movement</h3>
+<!-- MANAGEMENT PAGE -->
+<div id="managementPage" class="hidden">
+  <div class="flex min-h-screen">
+    <aside class="w-64 bg-slate-900 text-slate-300 flex flex-col shrink-0">
+      <div class="p-5 border-b border-slate-800 flex items-center gap-3">
+        <div class="bg-gradient-to-tr from-indigo-600 to-violet-500 text-white rounded-xl w-10 h-10 flex items-center justify-center font-extrabold text-xl">SK</div>
+        <div>
+          <h1 class="text-base font-bold text-white">StockKeeper</h1>
+          <p class="text-[10px] text-slate-500 uppercase tracking-widest">Cloud Enterprise</p>
+        </div>
+      </div>
 
-<form id="stockForm" class="space-y-4" autocomplete="off">
-<div class="relative">
-<label class="text-xs font-semibold block mb-1">Item Code / Barcode *</label>
-<input id="itemCode" type="text" required placeholder="SKU-1004" class="w-full px-3.5 py-2 border rounded-xl text-sm font-mono">
-<div id="codeSuggestions" class="autocomplete-list hidden absolute z-40 bg-white border rounded-xl shadow-xl w-full mt-1.5 overflow-hidden"></div>
-</div>
+      <div class="p-4 space-y-1 flex-1 overflow-y-auto">
+        <div class="text-[10px] font-bold text-slate-500 uppercase tracking-widest px-3 mb-2">Management</div>
 
-<div>
-<label class="text-xs font-semibold block mb-1">Item Name *</label>
-<input id="itemName" type="text" required placeholder="Item name" class="w-full px-3.5 py-2 border rounded-xl text-sm">
-</div>
+        <button onclick="scrollToSection('stockForm')" class="w-full text-left px-3 py-2.5 rounded-lg text-xs font-semibold hover:bg-slate-800 hover:text-white">⚡ Record Stock</button>
+        <button onclick="scrollToSection('inventorySection')" class="w-full text-left px-3 py-2.5 rounded-lg text-xs font-semibold hover:bg-slate-800 hover:text-white">📦 Inventory</button>
+        <button onclick="scrollToSection('transactionsSection')" class="w-full text-left px-3 py-2.5 rounded-lg text-xs font-semibold hover:bg-slate-800 hover:text-white">🧾 Transactions</button>
 
-<div>
-<label class="text-xs font-semibold block mb-1">Operation Type</label>
-<div class="grid grid-cols-2 gap-2">
-<label><input type="radio" name="txnType" value="IN" class="peer hidden" checked onchange="updatePartyLabel()">
-<div class="text-center py-2.5 rounded-xl border peer-checked:border-emerald-500 peer-checked:bg-emerald-50 font-bold text-xs">+ Stock IN</div></label>
-<label><input type="radio" name="txnType" value="OUT" class="peer hidden" onchange="updatePartyLabel()">
-<div class="text-center py-2.5 rounded-xl border peer-checked:border-rose-500 peer-checked:bg-rose-50 font-bold text-xs">- Stock OUT</div></label>
-</div>
-</div>
+        <div class="text-[10px] font-bold text-slate-500 uppercase tracking-widest px-3 pt-5 mb-2">Sharing & Access</div>
+        <button onclick="openViewerManager()" class="w-full text-left px-3 py-2.5 rounded-lg text-xs font-semibold hover:bg-slate-800 hover:text-white">🔗 Viewer Link</button>
+        <button onclick="openEditorsManager()" class="w-full text-left px-3 py-2.5 rounded-lg text-xs font-semibold hover:bg-slate-800 hover:text-white">👥 Authorized Editors</button>
 
-<div>
-<label id="partyLabel" class="text-xs font-semibold block mb-1">Supplier Name (Bought From)</label>
-<input id="itemParty" type="text" placeholder="Supplier name" class="w-full px-3.5 py-2 border rounded-xl text-sm">
-</div>
+        <div class="text-[10px] font-bold text-slate-500 uppercase tracking-widest px-3 pt-5 mb-2">Data</div>
+        <button onclick="exportInventoryCSV()" class="w-full text-left px-3 py-2.5 rounded-lg text-xs font-semibold text-emerald-400 hover:bg-emerald-500/10">📊 Export Inventory CSV</button>
+        <button onclick="exportTransactionsCSV()" class="w-full text-left px-3 py-2.5 rounded-lg text-xs font-semibold text-emerald-400 hover:bg-emerald-500/10">🧾 Export Logs CSV</button>
+        <button onclick="backupJSON()" class="w-full text-left px-3 py-2.5 rounded-lg text-xs font-semibold hover:bg-slate-800 hover:text-white">💾 Backup Database</button>
+        <button onclick="resetAppData()" class="w-full text-left px-3 py-2.5 rounded-lg text-xs font-semibold text-rose-400 hover:bg-rose-500/10">🗑 Purge System Data</button>
+      </div>
 
-<div class="p-3.5 bg-slate-50 rounded-xl border space-y-2.5">
-<span class="text-xs font-bold">📍 Warehouse Storage Mapping</span>
-<div>
-<label class="text-[11px] font-semibold block">Floor Level</label>
-<select id="itemFloor" class="w-full px-3 py-1.5 border rounded-lg text-xs bg-white">
-<option>Ground Floor</option><option>1st Floor</option><option>2nd Floor</option><option>3rd Floor</option>
-</select>
-</div>
-<div class="grid grid-cols-2 gap-2">
-<div><label class="text-[11px] font-semibold block">Rack No.</label><input id="itemRack" type="text" placeholder="Rack A-04" class="w-full px-3 py-1.5 border rounded-lg text-xs"></div>
-<div><label class="text-[11px] font-semibold block">Box No.</label><input id="itemBox" type="text" placeholder="Box 12" class="w-full px-3 py-1.5 border rounded-lg text-xs"></div>
-</div>
-</div>
+      <div class="p-4 border-t border-slate-800 bg-slate-950/50">
+        <div id="authArea"></div>
+      </div>
+    </aside>
 
-<div class="grid grid-cols-2 gap-2.5">
-<div><label class="text-xs font-semibold block mb-1">Quantity *</label><input id="itemQty" type="number" min="1" step="1" value="1" required oninput="calculateTotal()" class="w-full px-3.5 py-2 border rounded-xl text-sm"></div>
-<div><label class="text-xs font-semibold block mb-1">Unit Price (₹) *</label><input id="itemUnitPrice" type="number" step="0.01" min="0" value="0.00" required oninput="calculateTotal()" class="w-full px-3.5 py-2 border rounded-xl text-sm"></div>
-</div>
+    <main class="flex-1 min-w-0 overflow-y-auto">
+      <header class="bg-white border-b border-slate-200 px-6 md:px-8 py-4 sticky top-0 z-20 flex flex-wrap justify-between items-center gap-3">
+        <div>
+          <h2 class="text-xl font-extrabold text-slate-900">Inventory & Operations Dashboard</h2>
+          <p class="text-xs text-slate-500">Shared cloud inventory with role-based editing.</p>
+        </div>
+        <span id="syncStatus" class="px-3 py-1.5 rounded-full text-xs font-bold bg-slate-100 text-slate-600">Connecting...</span>
+      </header>
 
-<div>
-<label class="text-xs font-semibold block mb-1">Calculated Total (₹)</label>
-<input id="itemTotalPrice" type="text" readonly value="0.00" class="w-full px-3.5 py-2 bg-slate-100 border rounded-xl font-bold text-sm">
-</div>
+      <div class="p-5 md:p-8 space-y-7">
+        <div id="accessBanner" class="hidden rounded-xl p-4 text-sm font-semibold"></div>
 
-<div><label class="text-xs font-semibold block mb-1">Date *</label><input id="itemDate" type="date" required class="w-full px-3.5 py-2 border rounded-xl text-sm"></div>
-<div><label class="text-xs font-semibold block mb-1">Remarks / Reference</label><input id="itemNotes" type="text" placeholder="Invoice reference, order ID..." class="w-full px-3.5 py-2 border rounded-xl text-sm"></div>
+        <section class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-5">
+          <div class="bg-white rounded-xl p-5 border border-slate-200 shadow-sm">
+            <span class="text-xs font-bold uppercase tracking-wider text-slate-500">Total Products</span>
+            <p id="metricTotalItems" class="text-3xl font-extrabold mt-3">0</p>
+          </div>
+          <div class="bg-white rounded-xl p-5 border border-slate-200 shadow-sm">
+            <span class="text-xs font-bold uppercase tracking-wider text-slate-500">Low Stock</span>
+            <p id="metricLowStock" class="text-3xl font-extrabold text-rose-600 mt-3">0</p>
+          </div>
+          <div class="bg-white rounded-xl p-5 border border-slate-200 shadow-sm">
+            <span class="text-xs font-bold uppercase tracking-wider text-slate-500">Total Quantity</span>
+            <p id="metricTotalUnits" class="text-3xl font-extrabold text-emerald-600 mt-3">0</p>
+          </div>
+          <div class="bg-white rounded-xl p-5 border border-slate-200 shadow-sm">
+            <span class="text-xs font-bold uppercase tracking-wider text-slate-500">Inventory Value</span>
+            <p id="metricTotalValue" class="text-3xl font-extrabold mt-3">₹0.00</p>
+          </div>
+        </section>
 
-<button id="commitButton" type="submit" class="w-full bg-slate-900 hover:bg-slate-800 text-white font-bold py-3 rounded-xl text-xs uppercase">
-☁️ Commit to Cloud
-</button>
-</form>
-</div>
-</div>
+        <section class="bg-white rounded-2xl border border-slate-200 p-5 md:p-6 shadow-sm">
+          <div class="flex flex-wrap items-center justify-between gap-3 mb-5">
+            <div>
+              <h3 class="font-bold">📈 Financial Summary</h3>
+              <p class="text-xs text-slate-500 mt-1">Purchases and stock removals.</p>
+            </div>
+            <select id="reportRangeSelect" onchange="toggleCustomDateInputs();renderReports()" class="border border-slate-200 rounded-xl px-3 py-2 text-xs font-semibold">
+              <option value="month">This Month</option>
+              <option value="6months">Last 6 Months</option>
+              <option value="12months" selected>Last 12 Months</option>
+              <option value="all">All Time</option>
+              <option value="custom">Custom Range</option>
+            </select>
+          </div>
+          <div id="customDateRangeContainer" class="hidden flex flex-wrap gap-2 mb-4">
+            <input id="reportStartDate" type="date" onchange="renderReports()" class="border rounded-xl px-3 py-2 text-xs">
+            <input id="reportEndDate" type="date" onchange="renderReports()" class="border rounded-xl px-3 py-2 text-xs">
+          </div>
+          <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+            <div class="bg-slate-50 rounded-xl p-4"><div class="text-[10px] font-bold uppercase text-slate-400">Purchases</div><div id="reportSpent" class="text-2xl font-bold text-emerald-600 mt-1">₹0.00</div><div id="reportUnitsIn" class="text-xs text-slate-500">0 units</div></div>
+            <div class="bg-slate-50 rounded-xl p-4"><div class="text-[10px] font-bold uppercase text-slate-400">Outflow</div><div id="reportOutValue" class="text-2xl font-bold text-rose-600 mt-1">₹0.00</div><div id="reportUnitsOut" class="text-xs text-slate-500">0 units</div></div>
+            <div class="bg-slate-50 rounded-xl p-4"><div class="text-[10px] font-bold uppercase text-slate-400">Net Movement</div><div id="reportNetValue" class="text-2xl font-bold text-indigo-600 mt-1">₹0.00</div><div id="reportTxnCount" class="text-xs text-slate-500">0 transactions</div></div>
+          </div>
+        </section>
 
-<div class="lg:col-span-8 space-y-8">
-<div class="bg-white rounded-2xl border p-6 shadow-sm">
-<div class="flex flex-wrap items-center justify-between gap-3 mb-5">
-<div><h3 class="font-bold">📋 Active Inventory Directory</h3><p class="text-xs text-slate-500">Live cloud inventory</p></div>
-<input id="searchInventory" type="text" placeholder="Filter SKU, item, rack..." class="px-3.5 py-2 border rounded-xl text-xs w-60">
-</div>
+        <section id="stockFormSection" class="grid grid-cols-1 lg:grid-cols-12 gap-7">
+          <div class="lg:col-span-4">
+            <div class="bg-white rounded-2xl border border-slate-200 p-6 shadow-sm sticky top-24">
+              <div class="pb-4 mb-4 border-b border-slate-100">
+                <h3 class="font-bold">⚡ Record Stock Movement</h3>
+                <p class="text-xs text-slate-500 mt-1">Only the owner and authorized editors can save.</p>
+              </div>
 
-<div class="overflow-x-auto rounded-xl border">
-<table class="w-full text-left text-xs">
-<thead class="bg-slate-50 border-b text-slate-500 uppercase tracking-wider font-semibold">
-<tr><th class="py-3 px-3">SKU</th><th class="py-3 px-3">Item</th><th class="py-3 px-3">Location</th><th class="py-3 px-3">Qty</th><th class="py-3 px-3">Avg Price</th><th class="py-3 px-3">Total Value</th><th class="py-3 px-3">Status</th><th class="py-3 px-3 text-right">Action</th></tr>
-</thead>
-<tbody id="inventoryTableBody" class="divide-y divide-slate-100"></tbody>
-</table>
-<p id="inventoryEmptyMsg" class="text-center text-slate-400 text-xs py-8 hidden">No items found.</p>
-</div>
-</div>
+              <form id="stockForm" class="space-y-4" autocomplete="off">
+                <div>
+                  <label class="text-xs font-semibold">SKU / Item Code *</label>
+                  <input id="itemCode" required class="mt-1 w-full px-3 py-2.5 border rounded-xl text-sm font-mono" placeholder="SKU-1004">
+                </div>
+                <div>
+                  <label class="text-xs font-semibold">Product Name *</label>
+                  <input id="itemName" required class="mt-1 w-full px-3 py-2.5 border rounded-xl text-sm" placeholder="Product name">
+                </div>
+                <div class="grid grid-cols-2 gap-2">
+                  <div><label class="text-xs font-semibold">Model</label><input id="itemModel" class="mt-1 w-full px-3 py-2.5 border rounded-xl text-sm" placeholder="Model"></div>
+                  <div><label class="text-xs font-semibold">Part Number</label><input id="itemPartNumber" class="mt-1 w-full px-3 py-2.5 border rounded-xl text-sm" placeholder="Part no."></div>
+                </div>
 
-<div class="bg-white rounded-2xl border p-6 shadow-sm">
-<div class="mb-4"><h3 class="font-bold">🧾 Audit Log & History</h3><p class="text-xs text-slate-500">Complete historical register</p></div>
-<div class="overflow-x-auto max-h-96 rounded-xl border">
-<table class="w-full text-left text-xs">
-<thead class="bg-slate-50 border-b text-slate-500 uppercase tracking-wider font-semibold sticky top-0 z-10">
-<tr><th class="py-3 px-3">Date</th><th class="py-3 px-3">Item</th><th class="py-3 px-3">Type</th><th class="py-3 px-3">Party</th><th class="py-3 px-3">Location</th><th class="py-3 px-3">Qty</th><th class="py-3 px-3">Unit Price</th><th class="py-3 px-3">Total</th></tr>
-</thead>
-<tbody id="txnTableBody" class="divide-y divide-slate-100"></tbody>
-</table>
-<p id="txnEmptyMsg" class="text-center text-slate-400 text-xs py-8 hidden">No transaction logs recorded yet.</p>
-</div>
-</div>
-</div>
-</div>
-</main>
-</div>
+                <div>
+                  <label class="text-xs font-semibold">Operation</label>
+                  <div class="grid grid-cols-2 gap-2 mt-1">
+                    <label><input type="radio" name="txnType" value="IN" checked class="peer hidden"><div class="peer-checked:bg-emerald-50 peer-checked:border-emerald-500 border rounded-xl py-2.5 text-center text-xs font-bold cursor-pointer">+ STOCK IN</div></label>
+                    <label><input type="radio" name="txnType" value="OUT" class="peer hidden"><div class="peer-checked:bg-rose-50 peer-checked:border-rose-500 border rounded-xl py-2.5 text-center text-xs font-bold cursor-pointer">- STOCK OUT</div></label>
+                  </div>
+                </div>
+
+                <div><label id="partyLabel" class="text-xs font-semibold">Supplier Name</label><input id="itemParty" class="mt-1 w-full px-3 py-2.5 border rounded-xl text-sm"></div>
+
+                <div class="bg-slate-50 rounded-xl p-3.5 border space-y-3">
+                  <div class="text-xs font-bold">📍 Storage Location</div>
+                  <select id="itemFloor" class="w-full px-3 py-2 border rounded-lg text-xs">
+                    <option>Ground Floor</option><option>1st Floor</option><option>2nd Floor</option><option>3rd Floor</option>
+                  </select>
+                  <div class="grid grid-cols-2 gap-2">
+                    <input id="itemRack" class="px-3 py-2 border rounded-lg text-xs" placeholder="Rack">
+                    <input id="itemBox" class="px-3 py-2 border rounded-lg text-xs" placeholder="Box">
+                  </div>
+                </div>
+
+                <div class="grid grid-cols-2 gap-2">
+                  <div><label class="text-xs font-semibold">Quantity *</label><input id="itemQty" type="number" min="1" value="1" required oninput="calculateTotal()" class="mt-1 w-full px-3 py-2.5 border rounded-xl text-sm"></div>
+                  <div><label class="text-xs font-semibold">Unit Price ₹</label><input id="itemUnitPrice" type="number" min="0" step="0.01" value="0" oninput="calculateTotal()" class="mt-1 w-full px-3 py-2.5 border rounded-xl text-sm"></div>
+                </div>
+
+                <div><label class="text-xs font-semibold">Calculated Total ₹</label><input id="itemTotalPrice" readonly value="0.00" class="mt-1 w-full px-3 py-2.5 border rounded-xl bg-slate-100 font-bold"></div>
+                <div><label class="text-xs font-semibold">Date *</label><input id="itemDate" type="date" required class="mt-1 w-full px-3 py-2.5 border rounded-xl text-sm"></div>
+                <div><label class="text-xs font-semibold">Remarks</label><input id="itemNotes" class="mt-1 w-full px-3 py-2.5 border rounded-xl text-sm" placeholder="Invoice/reference"></div>
+
+                <button id="commitButton" class="w-full bg-slate-900 hover:bg-slate-800 text-white font-bold py-3 rounded-xl text-xs uppercase tracking-wider">☁️ Commit to Cloud</button>
+              </form>
+            </div>
+          </div>
+
+          <div class="lg:col-span-8 space-y-7">
+            <section id="inventorySection" class="bg-white rounded-2xl border border-slate-200 p-5 shadow-sm">
+              <div class="flex flex-wrap justify-between gap-3 mb-5">
+                <div><h3 class="font-bold">📋 Active Inventory</h3><p class="text-xs text-slate-500">Search by name, model, part number, SKU or location.</p></div>
+                <input id="searchInventory" class="w-full md:w-72 px-3 py-2.5 border rounded-xl text-xs" placeholder="Search inventory...">
+              </div>
+              <div class="overflow-x-auto border rounded-xl">
+                <table class="w-full text-left text-xs">
+                  <thead class="bg-slate-50 border-b"><tr>
+                    <th class="p-3">SKU</th><th class="p-3">Product</th><th class="p-3">Model</th><th class="p-3">Part No.</th><th class="p-3">Location</th><th class="p-3">Qty</th><th class="p-3">Avg Price</th><th class="p-3">Value</th><th class="p-3">Status</th><th class="p-3"></th>
+                  </tr></thead>
+                  <tbody id="inventoryTableBody" class="divide-y"></tbody>
+                </table>
+              </div>
+              <p id="inventoryEmptyMsg" class="hidden text-center text-xs text-slate-400 py-8">No inventory found.</p>
+            </section>
+
+            <section id="transactionsSection" class="bg-white rounded-2xl border border-slate-200 p-5 shadow-sm">
+              <div class="mb-4"><h3 class="font-bold">🧾 Audit Log & History</h3><p class="text-xs text-slate-500">Every stock movement is stored in Firestore.</p></div>
+              <div class="overflow-x-auto border rounded-xl max-h-96">
+                <table class="w-full text-left text-xs">
+                  <thead class="bg-slate-50 border-b sticky top-0"><tr>
+                    <th class="p-3">Date</th><th class="p-3">Product</th><th class="p-3">Type</th><th class="p-3">Party</th><th class="p-3">Location</th><th class="p-3">Qty</th><th class="p-3">Price</th><th class="p-3">Total</th>
+                  </tr></thead>
+                  <tbody id="txnTableBody" class="divide-y"></tbody>
+                </table>
+              </div>
+              <p id="txnEmptyMsg" class="hidden text-center text-xs text-slate-400 py-8">No transaction logs recorded.</p>
+            </section>
+          </div>
+        </section>
+      </div>
+    </main>
+  </div>
 </div>
 
 <script>
-/* ================= FIREBASE ================= */
+/* ========================= CONFIG ========================= */
 const firebaseConfig = {
   apiKey: "AIzaSyC7ZCEl4ez4Tt8HPTQqNjLscNs1uVkOVgo",
   authDomain: "stockkeeper-8d4ed.firebaseapp.com",
@@ -277,258 +276,62 @@ const firebaseConfig = {
   measurementId: "G-PV0CGCZPKV"
 };
 
-firebase.initializeApp(firebaseConfig);
+const COMPANY_ID = "stockkeeper-main";
+const OWNER_EMAIL = "eplstore12@gmail.com"; // Change this only if your owner Gmail is different.
+const LOW_STOCK_DEFAULT = 5;
 
+/* Existing EmailJS account from your old code. */
+const EMAILJS_PUBLIC_KEY = "l51hBXXZZPYhmMBSo";
+const EMAILJS_SERVICE_ID = "service_jdnsri6";
+const LOW_STOCK_TEMPLATE_ID = "template_0dpp4zi";
+/* Create a second EmailJS template for viewer access if you want viewer emails. */
+const VIEWER_ACCESS_TEMPLATE_ID = "template_viewer_access";
+
+firebase.initializeApp(firebaseConfig);
 const auth = firebase.auth();
 const db = firebase.firestore();
 const provider = new firebase.auth.GoogleAuthProvider();
 
-/*
- IMPORTANT:
- This version uses ONE SHARED STORE instead of users/{uid}.
- Therefore every authenticated Google account sees the same inventory.
- Later, Firestore Security Rules should restrict writes to your selected users.
-*/
-const STORE_ID = "main";
-const STORE_REF = db.collection("stores").doc(STORE_ID);
-const INVENTORY_REF = STORE_REF.collection("inventory");
-const TRANSACTIONS_REF = STORE_REF.collection("transactions");
-const SETTINGS_REF = STORE_REF.collection("settings").doc("app");
+if (typeof emailjs !== "undefined") {
+  try { emailjs.init(EMAILJS_PUBLIC_KEY); } catch(e) { console.warn(e); }
+}
 
-const LOW_STOCK_THRESHOLD = 5;
+const companyRef = db.collection("companies").doc(COMPANY_ID);
+const inventoryRef = companyRef.collection("inventory");
+const transactionsRef = companyRef.collection("transactions");
+const membersRef = companyRef.collection("members");
+const viewerLinksRef = companyRef.collection("viewerLinks");
 
+let currentUser = null;
+let currentRole = null;
 let inventory = [];
 let transactions = [];
-let appPin = localStorage.getItem("sk_app_pin_v5") || "";
 let unsubscribeInventory = null;
 let unsubscribeTransactions = null;
-let unsubscribeSettings = null;
+let unsubscribeMembers = null;
+let viewerToken = null;
+let viewerInventory = [];
+let unsubscribeViewerInventory = null;
 
-/* ================= AUTH ================= */
-function handleGoogleSignIn() {
-  auth.signInWithPopup(provider)
-    .then(result => showToast(`Welcome, ${result.user.displayName || result.user.email}!`, "success"))
-    .catch(error => {
-      console.error("Google sign-in:", error);
-      showToast(getFirebaseError(error), "error");
-    });
-}
-
-function handleSignOut() {
-  auth.signOut()
-    .then(() => showToast("Signed out.", "info"))
-    .catch(error => showToast(getFirebaseError(error), "error"));
-}
-
-auth.onAuthStateChanged(user => {
-  const main = document.getElementById("mainAppContent");
-  const box = document.getElementById("authButtonContainer");
-
-  if (user) {
-    main.classList.remove("hidden");
-
-    box.innerHTML = `
-      <div class="flex items-center gap-3">
-        <img src="${escapeHtml(user.photoURL || "")}" class="w-8 h-8 rounded-full border border-slate-700" alt="">
-        <div class="min-w-0 flex-1">
-          <p class="text-xs font-semibold text-white truncate">${escapeHtml(user.displayName || user.email)}</p>
-          <p class="text-[10px] text-slate-500 truncate">${escapeHtml(user.email || "")}</p>
-          <button onclick="handleSignOut()" class="text-[10px] text-slate-400 hover:text-white">Sign out</button>
-        </div>
-      </div>`;
-
-    setupFirestoreListeners();
-  } else {
-    main.classList.add("hidden");
-    box.innerHTML = `
-      <button onclick="handleGoogleSignIn()" class="w-full text-xs bg-indigo-600 hover:bg-indigo-500 text-white font-semibold px-3 py-2.5 rounded-xl">
-        Sign in with Google
-      </button>`;
-    stopListeners();
-    setSyncStatus("Signed out", false);
-  }
-});
-
-/* ================= FIRESTORE LISTENERS ================= */
-function stopListeners() {
-  if (unsubscribeInventory) unsubscribeInventory();
-  if (unsubscribeTransactions) unsubscribeTransactions();
-  if (unsubscribeSettings) unsubscribeSettings();
-  unsubscribeInventory = unsubscribeTransactions = unsubscribeSettings = null;
-}
-
-function setupFirestoreListeners() {
-  stopListeners();
-
-  setSyncStatus("Connecting...", false);
-
-  unsubscribeInventory = INVENTORY_REF.onSnapshot(
-    snapshot => {
-      inventory = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
-      renderAll();
-      setSyncStatus("Firebase Cloud Connected", true);
-    },
-    error => {
-      console.error("Inventory listener error:", error);
-      setSyncStatus("Cloud Error", false);
-      showToast("Firestore inventory error: " + getFirebaseError(error), "error");
-    }
-  );
-
-  unsubscribeTransactions = TRANSACTIONS_REF.onSnapshot(
-    snapshot => {
-      transactions = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
-      renderAll();
-    },
-    error => {
-      console.error("Transaction listener error:", error);
-      showToast("Firestore transaction error: " + getFirebaseError(error), "error");
-    }
-  );
-
-  unsubscribeSettings = SETTINGS_REF.onSnapshot(
-    doc => {
-      if (doc.exists && doc.data().pin) {
-        appPin = String(doc.data().pin);
-        localStorage.setItem("sk_app_pin_v5", appPin);
-      }
-    },
-    error => console.warn("Settings listener:", error)
-  );
-}
-
-function setSyncStatus(text, connected) {
-  const el = document.getElementById("syncStatus");
-  el.innerHTML = `<span class="w-1.5 h-1.5 rounded-full ${connected ? "bg-emerald-500 animate-pulse" : "bg-rose-500"}"></span> ${escapeHtml(text)}`;
-  el.className = `inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-semibold border ${connected ? "bg-emerald-50 text-emerald-700 border-emerald-200" : "bg-rose-50 text-rose-700 border-rose-200"}`;
-}
-
-/* ================= PIN ================= */
-async function ensurePin() {
-  if (appPin && /^\d{4}$/.test(appPin)) return true;
-
-  const newPin = prompt("Create your 4-digit Security PIN:");
-  if (newPin === null) return false;
-
-  if (!/^\d{4}$/.test(newPin.trim())) {
-    showToast("PIN must contain exactly 4 digits.", "error");
-    return false;
-  }
-
-  appPin = newPin.trim();
-  localStorage.setItem("sk_app_pin_v5", appPin);
-
-  try {
-    await SETTINGS_REF.set({
-      pin: appPin,
-      updatedAt: new Date().toISOString()
-    }, { merge: true });
-  } catch (error) {
-    console.error("PIN cloud save:", error);
-    showToast("PIN could not be saved to cloud. Check Firestore rules.", "error");
-  }
-
-  return true;
-}
-
-async function verifyPin(actionName = "perform this action") {
-  if (!(await ensurePin())) return false;
-
-  const entered = prompt(`🔒 Enter your 4-digit PIN to ${actionName}:`);
-  if (entered === null) return false;
-
-  if (entered.trim() === appPin) return true;
-
-  showToast("Incorrect PIN. Access denied.", "error");
-  return false;
-}
-
-async function changeAppPin() {
-  if (!(await verifyPin("change security PIN"))) return;
-
-  const newPin = prompt("Enter new 4-digit PIN:");
-  if (newPin === null) return;
-
-  if (!/^\d{4}$/.test(newPin.trim())) {
-    showToast("PIN must contain exactly 4 digits.", "error");
-    return;
-  }
-
-  appPin = newPin.trim();
-  localStorage.setItem("sk_app_pin_v5", appPin);
-
-  try {
-    await SETTINGS_REF.set({
-      pin: appPin,
-      updatedAt: new Date().toISOString()
-    }, { merge: true });
-
-    showToast("Security PIN updated in cloud.", "success");
-  } catch (error) {
-    console.error(error);
-    showToast("PIN update failed: " + getFirebaseError(error), "error");
-  }
-}
-
-/* ================= HELPERS ================= */
-function getFirebaseError(error) {
-  if (!error) return "Unknown error";
-  const code = error.code || "";
-  const map = {
-    "permission-denied": "Permission denied by Firestore rules.",
-    "failed-precondition": "Firestore is not configured correctly.",
-    "unauthenticated": "You must sign in first.",
-    "not-found": "Requested cloud document was not found.",
-    "already-exists": "Cloud record already exists.",
-    "unavailable": "Firebase is temporarily unavailable."
-  };
-  return map[code] || error.message || String(error);
+/* ========================= COMMON ========================= */
+function showToast(message, type="success") {
+  const colors = {success:"bg-slate-900",error:"bg-rose-600",info:"bg-indigo-600"};
+  const box = document.createElement("div");
+  box.className = `toast ${colors[type]||colors.success} text-white px-4 py-3 rounded-xl shadow-xl text-xs font-semibold`;
+  box.textContent = message;
+  document.getElementById("toastContainer").appendChild(box);
+  setTimeout(()=>box.remove(),4200);
 }
 
 function escapeHtml(value) {
-  const div = document.createElement("div");
-  div.textContent = String(value ?? "");
-  return div.innerHTML;
+  const d = document.createElement("div");
+  d.textContent = value == null ? "" : String(value);
+  return d.innerHTML;
 }
 
-function showToast(message, type = "success") {
-  const colors = {
-    success: "bg-slate-900 border border-slate-700",
-    error: "bg-rose-600",
-    info: "bg-indigo-600"
-  };
-  const container = document.getElementById("toastContainer");
-  const toast = document.createElement("div");
-  toast.className = `toast text-white px-4 py-3 rounded-xl shadow-xl text-xs font-semibold ${colors[type] || colors.info}`;
-  toast.textContent = message;
-  container.appendChild(toast);
-  setTimeout(() => toast.remove(), 3200);
-}
-
-function calculateTotal() {
-  const qty = Number(document.getElementById("itemQty").value) || 0;
-  const price = Number(document.getElementById("itemUnitPrice").value) || 0;
-  document.getElementById("itemTotalPrice").value = (qty * price).toFixed(2);
-}
-
-function formatLocation(floor, rack, box) {
-  const parts = [];
-  if (floor) parts.push(floor);
-  if (rack) parts.push("Rack: " + rack);
-  if (box) parts.push("Box: " + box);
-  return parts.length ? parts.join(", ") : "N/A";
-}
-
-function formatDate(value) {
-  if (!value) return "N/A";
-  let date;
-  if (value && typeof value.toDate === "function") date = value.toDate();
-  else date = new Date(value);
-  if (isNaN(date.getTime())) return "N/A";
-  return date.toLocaleString(undefined, {
-    year: "numeric", month: "short", day: "2-digit",
-    hour: "2-digit", minute: "2-digit"
-  });
+function todayISO() {
+  const d = new Date();
+  return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,"0")}-${String(d.getDate()).padStart(2,"0")}`;
 }
 
 function dateStamp() {
@@ -536,190 +339,382 @@ function dateStamp() {
   return `${d.getFullYear()}${String(d.getMonth()+1).padStart(2,"0")}${String(d.getDate()).padStart(2,"0")}_${String(d.getHours()).padStart(2,"0")}${String(d.getMinutes()).padStart(2,"0")}`;
 }
 
-function setTodayDate() {
-  const d = new Date();
-  const y = d.getFullYear();
-  const m = String(d.getMonth()+1).padStart(2,"0");
-  const day = String(d.getDate()).padStart(2,"0");
-  document.getElementById("itemDate").value = `${y}-${m}-${day}`;
-  document.getElementById("reportStartDate").value = `${y}-${m}-01`;
-  document.getElementById("reportEndDate").value = `${y}-${m}-${day}`;
+function formatDate(value) {
+  if (!value) return "N/A";
+  let d = value && typeof value.toDate === "function" ? value.toDate() : new Date(value);
+  if (Number.isNaN(d.getTime())) return "N/A";
+  return d.toLocaleString(undefined,{year:"numeric",month:"short",day:"2-digit",hour:"2-digit",minute:"2-digit"});
 }
 
-function updatePartyLabel() {
-  const type = document.querySelector('input[name="txnType"]:checked').value;
-  document.getElementById("partyLabel").textContent =
-    type === "IN" ? "Supplier Name (Bought From)" : "Customer Name (Sold To)";
-  document.getElementById("itemParty").placeholder =
-    type === "IN" ? "Supplier name" : "Customer / Buyer name";
+function locationText(i) {
+  return [i.floor, i.rack ? `Rack: ${i.rack}` : "", i.box ? `Box: ${i.box}` : ""].filter(Boolean).join(", ") || "N/A";
 }
 
-/* ================= PRICE ================= */
-function getDerivedAvgUnitPrice(code) {
-  if (!code) return 0;
-
-  const inTxns = transactions.filter(t =>
-    t.code &&
-    t.code.toLowerCase() === code.toLowerCase() &&
-    t.type === "IN"
-  );
-
-  const totalQty = inTxns.reduce((sum,t) => sum + (Number(t.qty) || 0), 0);
-  const totalSpent = inTxns.reduce((sum,t) =>
-    sum + ((Number(t.qty) || 0) * (Number(t.unitPrice) || 0)), 0);
-
-  if (totalQty > 0) return totalSpent / totalQty;
-
-  const item = inventory.find(i =>
-    i.code && i.code.toLowerCase() === code.toLowerCase()
-  );
-
-  return item ? Number(item.unitPrice) || 0 : 0;
+function inventoryDocId(code) {
+  /* Deterministic IDs remove the stale-document problem from the old code. */
+  return "sku_" + String(code).trim().toLowerCase().replace(/[^a-z0-9_-]/g,"_").slice(0,100);
 }
 
-/* ================= RENDER ================= */
-function renderMetrics() {
-  const totalItems = inventory.length;
-  const lowStock = inventory.filter(i => Number(i.qty) < LOW_STOCK_THRESHOLD).length;
-  const totalUnits = inventory.reduce((sum,i) => sum + (Number(i.qty) || 0), 0);
-
-  const totalValue = inventory.reduce((sum,i) => {
-    return sum + (Number(i.qty) || 0) * getDerivedAvgUnitPrice(i.code);
-  }, 0);
-
-  document.getElementById("metricTotalItems").textContent = totalItems;
-  document.getElementById("metricLowStock").textContent = lowStock;
-  document.getElementById("metricTotalUnits").textContent = totalUnits;
-  document.getElementById("metricTotalValue").textContent = `₹${totalValue.toFixed(2)}`;
+function isOwner(user=currentUser) {
+  return !!user && (String(user.email||"").toLowerCase() === OWNER_EMAIL.toLowerCase());
 }
 
-function getFilteredReportTransactions() {
-  const range = document.getElementById("reportRangeSelect").value;
-  const now = new Date();
+function canEdit() {
+  return currentRole === "owner" || currentRole === "editor";
+}
 
-  let start = new Date(0);
-  let end = new Date();
+function setSync(text, ok=true) {
+  const el = document.getElementById("syncStatus");
+  el.textContent = text;
+  el.className = "px-3 py-1.5 rounded-full text-xs font-bold " + (ok ? "bg-emerald-50 text-emerald-700" : "bg-rose-50 text-rose-700");
+}
 
-  if (range === "month") {
-    start = new Date(now.getFullYear(), now.getMonth(), 1);
-  } else if (range === "6months") {
-    start = new Date(now.getFullYear(), now.getMonth()-6, now.getDate());
-  } else if (range === "12months") {
-    start = new Date(now.getFullYear(), now.getMonth()-12, now.getDate());
-  } else if (range === "custom") {
-    const s = document.getElementById("reportStartDate").value;
-    const e = document.getElementById("reportEndDate").value;
-    if (s) start = new Date(s + "T00:00:00");
-    if (e) end = new Date(e + "T23:59:59.999");
-  }
+function scrollToSection(id) {
+  const el = document.getElementById(id);
+  if (el) el.scrollIntoView({behavior:"smooth",block:"start"});
+}
 
-  return transactions.filter(t => {
-    const d = t.date && typeof t.date.toDate === "function" ? t.date.toDate() : new Date(t.date);
-    return d >= start && d <= end;
+/* ========================= AUTH ========================= */
+function signIn() {
+  auth.signInWithPopup(provider).catch(err => {
+    console.error(err);
+    showToast(err.message || "Google sign-in failed.","error");
   });
 }
 
-function toggleCustomDateInputs() {
-  const show = document.getElementById("reportRangeSelect").value === "custom";
-  document.getElementById("customDateRangeContainer").classList.toggle("hidden", !show);
+function signOut() {
+  auth.signOut().catch(err=>showToast(err.message,"error"));
+}
+
+auth.onAuthStateChanged(async user => {
+  currentUser = user;
+  if (!user) {
+    if (unsubscribeInventory) unsubscribeInventory();
+    if (unsubscribeTransactions) unsubscribeTransactions();
+    if (unsubscribeMembers) unsubscribeMembers();
+    document.getElementById("managementPage").classList.remove("hidden");
+    document.getElementById("mainAppContent");
+    document.getElementById("authArea").innerHTML = `
+      <button onclick="signIn()" class="w-full bg-indigo-600 hover:bg-indigo-500 text-white rounded-xl py-2.5 text-xs font-bold">
+        Sign in with Google
+      </button>`;
+    document.getElementById("accessBanner").classList.add("hidden");
+    return;
+  }
+
+  document.getElementById("authArea").innerHTML = `
+    <div class="flex items-center gap-2">
+      <img src="${escapeHtml(user.photoURL||"")}" class="w-8 h-8 rounded-full border border-slate-700" onerror="this.style.display='none'">
+      <div class="min-w-0 flex-1">
+        <div class="text-[11px] text-white font-semibold truncate">${escapeHtml(user.displayName||user.email)}</div>
+        <div class="text-[10px] text-slate-500 truncate">${escapeHtml(user.email||"")}</div>
+        <button onclick="signOut()" class="text-[10px] text-slate-400 hover:text-white">Sign out</button>
+      </div>
+    </div>`;
+
+  await resolveRole(user);
+});
+
+async function resolveRole(user) {
+  if (isOwner(user)) {
+    currentRole = "owner";
+    showManagement();
+    subscribeData();
+    return;
+  }
+
+  try {
+    const memberSnap = await membersRef.doc(user.uid).get();
+    if (memberSnap.exists && memberSnap.data().active !== false && memberSnap.data().role === "editor") {
+      currentRole = "editor";
+      showManagement();
+      subscribeData();
+    } else {
+      currentRole = "viewerDenied";
+      showManagement();
+      inventory = [];
+      transactions = [];
+      renderAll();
+      const banner = document.getElementById("accessBanner");
+      banner.className = "rounded-xl p-4 text-sm font-semibold bg-amber-50 border border-amber-200 text-amber-800";
+      banner.innerHTML = `You are signed in as <b>${escapeHtml(user.email||"")}</b>, but this Google account is not an authorized editor. Use the special inventory link to view stock, or ask the owner to authorize this account.`;
+      document.getElementById("stockFormSection").classList.add("hidden");
+      setSync("Signed in — no edit access", false);
+    }
+  } catch (err) {
+    console.error(err);
+    currentRole = "viewerDenied";
+    showToast("Could not check editor permissions. Deploy the Firestore rules below.","error");
+  }
+}
+
+function showManagement() {
+  document.getElementById("managementPage").classList.remove("hidden");
+  document.getElementById("viewerPage").classList.add("hidden");
+  const form = document.getElementById("stockFormSection");
+  if (form) form.classList.toggle("hidden", !canEdit());
+  const banner = document.getElementById("accessBanner");
+  if (currentRole === "owner") {
+    banner.className = "rounded-xl p-4 text-sm font-semibold bg-indigo-50 border border-indigo-200 text-indigo-800";
+    banner.innerHTML = "👑 Owner access: you can manage inventory, authorized editors and viewer links.";
+    banner.classList.remove("hidden");
+  } else if (currentRole === "editor") {
+    banner.className = "rounded-xl p-4 text-sm font-semibold bg-emerald-50 border border-emerald-200 text-emerald-800";
+    banner.innerHTML = "✏️ Editor access: you can manage inventory, but cannot add/remove authorized editors or viewer links.";
+    banner.classList.remove("hidden");
+  }
+}
+
+function subscribeData() {
+  if (unsubscribeInventory) unsubscribeInventory();
+  if (unsubscribeTransactions) unsubscribeTransactions();
+
+  setSync("Connecting...",true);
+
+  unsubscribeInventory = inventoryRef.onSnapshot(snap=>{
+    inventory = snap.docs.map(d=>({id:d.id,...d.data()}));
+    renderAll();
+    setSync("Firebase Cloud Connected",true);
+  },err=>{
+    console.error("Inventory listener:",err);
+    setSync("Firestore error",false);
+    showToast(friendlyFirestoreError(err),"error");
+  });
+
+  unsubscribeTransactions = transactionsRef.onSnapshot(snap=>{
+    transactions = snap.docs.map(d=>({id:d.id,...d.data()}));
+    renderAll();
+  },err=>console.error("Transaction listener:",err));
+}
+
+function friendlyFirestoreError(err) {
+  if (!err) return "Firestore error";
+  if (err.code === "permission-denied") return "Permission denied. Check firestore.rules and your editor/owner account.";
+  if (err.code === "not-found") return "Requested Firestore document was not found. The new code avoids update() on missing documents.";
+  if (err.code === "failed-precondition") return "Firestore is not ready. Make sure Cloud Firestore has been created in this Firebase project.";
+  return err.message || "Firestore error";
+}
+
+/* ========================= FORM ========================= */
+document.querySelectorAll('input[name="txnType"]').forEach(r=>r.addEventListener("change",updatePartyLabel));
+function updatePartyLabel() {
+  const out = document.querySelector('input[name="txnType"]:checked').value === "OUT";
+  document.getElementById("partyLabel").textContent = out ? "Customer Name" : "Supplier Name";
+  document.getElementById("itemParty").placeholder = out ? "Sold to..." : "Bought from...";
+}
+
+function calculateTotal() {
+  const q = Number(document.getElementById("itemQty").value)||0;
+  const p = Number(document.getElementById("itemUnitPrice").value)||0;
+  document.getElementById("itemTotalPrice").value = (q*p).toFixed(2);
+}
+
+function averagePrice(code) {
+  const tx = transactions.filter(t=>String(t.code||"").toLowerCase()===String(code||"").toLowerCase() && t.type==="IN");
+  const qty = tx.reduce((s,t)=>s+(Number(t.qty)||0),0);
+  const val = tx.reduce((s,t)=>s+(Number(t.qty)||0)*(Number(t.unitPrice)||0),0);
+  if (qty > 0) return val/qty;
+  const item = inventory.find(i=>String(i.code||"").toLowerCase()===String(code||"").toLowerCase());
+  return Number(item?.unitPrice)||0;
+}
+
+document.getElementById("stockForm").addEventListener("submit", async e=>{
+  e.preventDefault();
+  if (!canEdit()) return showToast("This Google account does not have edit permission.","error");
+  if (!currentUser) return showToast("Please sign in first.","error");
+
+  const code = document.getElementById("itemCode").value.trim();
+  const name = document.getElementById("itemName").value.trim();
+  const model = document.getElementById("itemModel").value.trim();
+  const partNumber = document.getElementById("itemPartNumber").value.trim();
+  const type = document.querySelector('input[name="txnType"]:checked').value;
+  const party = document.getElementById("itemParty").value.trim();
+  const floor = document.getElementById("itemFloor").value;
+  const rack = document.getElementById("itemRack").value.trim();
+  const box = document.getElementById("itemBox").value.trim();
+  const qty = Number.parseInt(document.getElementById("itemQty").value,10);
+  const unitPrice = Number.parseFloat(document.getElementById("itemUnitPrice").value)||0;
+  const dateVal = document.getElementById("itemDate").value;
+  const notes = document.getElementById("itemNotes").value.trim();
+
+  if (!code || !name || !qty || qty < 1 || !dateVal) {
+    return showToast("SKU, product name, quantity and date are required.","error");
+  }
+
+  const docId = inventoryDocId(code);
+  const invDoc = inventoryRef.doc(docId);
+  const txnDoc = transactionsRef.doc();
+
+  const commitButton = document.getElementById("commitButton");
+  commitButton.disabled = true;
+  commitButton.textContent = "Saving...";
+
+  try {
+    const result = await db.runTransaction(async tx=>{
+      const snap = await tx.get(invDoc);
+      const old = snap.exists ? snap.data() : null;
+      const currentQty = Number(old?.qty)||0;
+
+      if (type === "OUT" && (!snap.exists || currentQty < qty)) {
+        throw new Error(`INSUFFICIENT_STOCK:${currentQty}`);
+      }
+
+      const newQty = type === "IN" ? currentQty + qty : currentQty - qty;
+      const existingUnitPrice = Number(old?.unitPrice)||0;
+
+      const itemData = {
+        code,name,model,partNumber,
+        qty:newQty,
+        floor,rack,box,
+        unitPrice: unitPrice > 0 ? unitPrice : existingUnitPrice,
+        minStock: Number(old?.minStock) || LOW_STOCK_DEFAULT,
+        updatedAt: firebase.firestore.FieldValue.serverTimestamp()
+      };
+
+      tx.set(invDoc,itemData,{merge:true});
+
+      tx.set(txnDoc,{
+        code,name,model,partNumber,type,party,
+        floor,rack,box,qty,unitPrice,notes,
+        date: dateVal,
+        createdAt: firebase.firestore.FieldValue.serverTimestamp(),
+        createdBy: currentUser.uid,
+        createdByEmail: currentUser.email || ""
+      });
+
+      return {newQty};
+    });
+
+    /* Keep the active public viewer copy synchronized. */
+    await syncAllViewerLinks();
+
+    showToast(type==="IN" ? `Added ${qty} × ${name}` : `Removed ${qty} × ${name}`,"success");
+
+    if (result.newQty <= LOW_STOCK_DEFAULT && typeof emailjs !== "undefined") {
+      sendLowStockEmail(name,code,result.newQty);
+    }
+
+    document.getElementById("stockForm").reset();
+    document.getElementById("itemQty").value = 1;
+    document.getElementById("itemUnitPrice").value = "0";
+    document.getElementById("itemDate").value = todayISO();
+    updatePartyLabel();
+    calculateTotal();
+
+  } catch(err) {
+    console.error("CLOUD SAVE ERROR:",err);
+    if (String(err.message||"").startsWith("INSUFFICIENT_STOCK:")) {
+      showToast(`Insufficient stock. Available: ${err.message.split(":")[1]}`,"error");
+    } else {
+      showToast(friendlyFirestoreError(err),"error");
+    }
+  } finally {
+    commitButton.disabled = false;
+    commitButton.textContent = "☁️ COMMIT TO CLOUD";
+  }
+});
+
+/* ========================= RENDER ========================= */
+function renderMetrics() {
+  const low = inventory.filter(i=>(Number(i.qty)||0) <= (Number(i.minStock)||LOW_STOCK_DEFAULT)).length;
+  const units = inventory.reduce((s,i)=>s+(Number(i.qty)||0),0);
+  const value = inventory.reduce((s,i)=>s+(Number(i.qty)||0)*averagePrice(i.code),0);
+  document.getElementById("metricTotalItems").textContent = inventory.length;
+  document.getElementById("metricLowStock").textContent = low;
+  document.getElementById("metricTotalUnits").textContent = units;
+  document.getElementById("metricTotalValue").textContent = "₹"+value.toFixed(2);
 }
 
 function renderReports() {
-  const txns = getFilteredReportTransactions();
-  let spent=0, out=0, inQty=0, outQty=0;
+  const range = document.getElementById("reportRangeSelect").value;
+  const now = new Date();
+  let start = new Date(0), end = new Date();
 
-  txns.forEach(t => {
-    const q = Number(t.qty) || 0;
-    const p = Number(t.unitPrice) || 0;
-    if (t.type === "IN") {
-      spent += q*p;
-      inQty += q;
-    } else {
-      out += q*p;
-      outQty += q;
-    }
+  if (range==="month") start = new Date(now.getFullYear(),now.getMonth(),1);
+  if (range==="6months") start = new Date(now.getFullYear(),now.getMonth()-6,now.getDate());
+  if (range==="12months") start = new Date(now.getFullYear(),now.getMonth()-12,now.getDate());
+  if (range==="custom") {
+    const s=document.getElementById("reportStartDate").value;
+    const e=document.getElementById("reportEndDate").value;
+    if(s) start=new Date(s);
+    if(e){end=new Date(e);end.setHours(23,59,59,999)}
+  }
+
+  const list=transactions.filter(t=>{
+    const d=new Date(t.date);
+    return d>=start && d<=end;
   });
 
-  document.getElementById("reportSpent").textContent = `₹${spent.toFixed(2)}`;
-  document.getElementById("reportUnitsIn").textContent = `${inQty} units added`;
-  document.getElementById("reportOutValue").textContent = `₹${out.toFixed(2)}`;
-  document.getElementById("reportUnitsOut").textContent = `${outQty} units removed`;
-  document.getElementById("reportNetValue").textContent = `₹${(spent-out).toFixed(2)}`;
-  document.getElementById("reportTxnCount").textContent = `${txns.length} transactions logged`;
+  let spent=0,out=0,inQty=0,outQty=0;
+  list.forEach(t=>{
+    const v=(Number(t.qty)||0)*(Number(t.unitPrice)||0);
+    if(t.type==="IN"){spent+=v;inQty+=Number(t.qty)||0}
+    else{out+=v;outQty+=Number(t.qty)||0}
+  });
+
+  document.getElementById("reportSpent").textContent="₹"+spent.toFixed(2);
+  document.getElementById("reportUnitsIn").textContent=inQty+" units added";
+  document.getElementById("reportOutValue").textContent="₹"+out.toFixed(2);
+  document.getElementById("reportUnitsOut").textContent=outQty+" units removed";
+  document.getElementById("reportNetValue").textContent="₹"+(spent-out).toFixed(2);
+  document.getElementById("reportTxnCount").textContent=list.length+" transactions";
 }
 
 function renderInventory(filter="") {
-  const tbody = document.getElementById("inventoryTableBody");
-  const empty = document.getElementById("inventoryEmptyMsg");
-  tbody.innerHTML = "";
+  const body=document.getElementById("inventoryTableBody");
+  const empty=document.getElementById("inventoryEmptyMsg");
+  const term=String(filter).toLowerCase();
 
-  const term = filter.toLowerCase();
+  const list=inventory.filter(i=>[
+    i.code,i.name,i.model,i.partNumber,i.floor,i.rack,i.box
+  ].some(v=>String(v||"").toLowerCase().includes(term)))
+  .sort((a,b)=>String(a.name||"").localeCompare(String(b.name||"")));
 
-  const filtered = inventory.filter(i =>
-    [i.name,i.code,i.floor,i.rack,i.box].some(v =>
-      String(v || "").toLowerCase().includes(term)
-    )
-  ).sort((a,b) => String(a.name || "").localeCompare(String(b.name || "")));
+  body.innerHTML="";
+  empty.classList.toggle("hidden",list.length!==0);
 
-  empty.classList.toggle("hidden", filtered.length !== 0);
-
-  filtered.forEach(item => {
-    const qty = Number(item.qty) || 0;
-    const avg = getDerivedAvgUnitPrice(item.code);
-    const low = qty < LOW_STOCK_THRESHOLD;
-
-    const row = document.createElement("tr");
-    row.className = "hover:bg-slate-50";
-
-    row.innerHTML = `
-      <td class="py-3 px-3 font-mono font-bold">${escapeHtml(item.code)}</td>
-      <td class="py-3 px-3 font-bold">${escapeHtml(item.name)}</td>
-      <td class="py-3 px-3 text-[11px] text-indigo-600">${escapeHtml(formatLocation(item.floor,item.rack,item.box))}</td>
-      <td class="py-3 px-3 font-bold">${qty}</td>
-      <td class="py-3 px-3">₹${avg.toFixed(2)}</td>
-      <td class="py-3 px-3 font-bold">₹${(qty*avg).toFixed(2)}</td>
-      <td class="py-3 px-3">
-        <span class="px-2 py-0.5 rounded-md text-[10px] font-semibold ${low ? "bg-rose-50 text-rose-700" : "bg-emerald-50 text-emerald-700"}">
-          ${low ? "Low Stock" : "In Stock"}
-        </span>
-      </td>
-      <td class="py-3 px-3 text-right">
-        <button class="delete-btn text-rose-500 font-semibold text-[11px]">Remove</button>
-      </td>`;
-
-    row.querySelector(".delete-btn").addEventListener("click", () => deleteItem(item.id));
-    tbody.appendChild(row);
+  list.forEach(i=>{
+    const qty=Number(i.qty)||0;
+    const avg=averagePrice(i.code);
+    const min=Number(i.minStock)||LOW_STOCK_DEFAULT;
+    const low=qty<=min;
+    const tr=document.createElement("tr");
+    tr.className="hover:bg-slate-50";
+    tr.innerHTML=`
+      <td class="p-3 font-mono font-bold">${escapeHtml(i.code)}</td>
+      <td class="p-3 font-bold">${escapeHtml(i.name)}</td>
+      <td class="p-3">${escapeHtml(i.model||"-")}</td>
+      <td class="p-3">${escapeHtml(i.partNumber||"-")}</td>
+      <td class="p-3 text-[11px] text-indigo-600">${escapeHtml(locationText(i))}</td>
+      <td class="p-3 font-bold">${qty}</td>
+      <td class="p-3">₹${avg.toFixed(2)}</td>
+      <td class="p-3 font-bold">₹${(qty*avg).toFixed(2)}</td>
+      <td class="p-3">${low?'<span class="px-2 py-1 rounded bg-rose-50 text-rose-700 font-bold">Low</span>':'<span class="px-2 py-1 rounded bg-emerald-50 text-emerald-700 font-bold">OK</span>'}</td>
+      <td class="p-3 text-right">${canEdit()?`<button onclick="deleteItem('${escapeHtml(i.id)}')" class="text-rose-600 font-bold">Remove</button>`:""}</td>`;
+    body.appendChild(tr);
   });
 }
 
 function renderTransactions() {
-  const tbody = document.getElementById("txnTableBody");
-  const empty = document.getElementById("txnEmptyMsg");
-  tbody.innerHTML = "";
+  const body=document.getElementById("txnTableBody");
+  const empty=document.getElementById("txnEmptyMsg");
+  const list=[...transactions].sort((a,b)=>new Date(b.date)-new Date(a.date));
+  body.innerHTML="";
+  empty.classList.toggle("hidden",list.length!==0);
 
-  const sorted = [...transactions].sort((a,b) => {
-    const da = a.date && typeof a.date.toDate === "function" ? a.date.toDate() : new Date(a.date);
-    const dbb = b.date && typeof b.date.toDate === "function" ? b.date.toDate() : new Date(b.date);
-    return dbb - da;
-  });
-
-  empty.classList.toggle("hidden", sorted.length !== 0);
-
-  sorted.forEach(t => {
-    const q = Number(t.qty) || 0;
-    const p = Number(t.unitPrice) || 0;
-    const row = document.createElement("tr");
-
-    row.innerHTML = `
-      <td class="py-3 px-3 text-[11px] whitespace-nowrap">${escapeHtml(formatDate(t.date))}</td>
-      <td class="py-3 px-3 font-bold">${escapeHtml(t.name)}</td>
-      <td class="py-3 px-3"><span class="px-2 py-0.5 rounded-md text-[10px] font-bold ${t.type === "IN" ? "bg-emerald-100 text-emerald-800" : "bg-rose-100 text-rose-800"}">${escapeHtml(t.type)}</span></td>
-      <td class="py-3 px-3">${escapeHtml(t.party || "-")}</td>
-      <td class="py-3 px-3 text-[11px]">${escapeHtml(formatLocation(t.floor,t.rack,t.box))}</td>
-      <td class="py-3 px-3 font-bold">${t.type === "IN" ? "+" : "-"}${q}</td>
-      <td class="py-3 px-3">₹${p.toFixed(2)}</td>
-      <td class="py-3 px-3 font-bold">₹${(q*p).toFixed(2)}</td>`;
-    tbody.appendChild(row);
+  list.forEach(t=>{
+    const qty=Number(t.qty)||0, p=Number(t.unitPrice)||0;
+    const tr=document.createElement("tr");
+    tr.innerHTML=`
+      <td class="p-3 text-slate-500">${escapeHtml(t.date||"-")}</td>
+      <td class="p-3 font-bold">${escapeHtml(t.name||"-")}</td>
+      <td class="p-3">${t.type==="IN"?'<span class="px-2 py-1 rounded bg-emerald-50 text-emerald-700 font-bold">IN</span>':'<span class="px-2 py-1 rounded bg-rose-50 text-rose-700 font-bold">OUT</span>'}</td>
+      <td class="p-3">${escapeHtml(t.party||"-")}</td>
+      <td class="p-3">${escapeHtml(locationText(t))}</td>
+      <td class="p-3 font-bold">${t.type==="IN"?"+":"-"}${qty}</td>
+      <td class="p-3">₹${p.toFixed(2)}</td>
+      <td class="p-3 font-bold">₹${(qty*p).toFixed(2)}</td>`;
+    body.appendChild(tr);
   });
 }
 
@@ -730,368 +725,381 @@ function renderAll() {
   renderTransactions();
 }
 
-/* ================= FORM / CLOUD WRITE ================= */
-document.getElementById("stockForm").addEventListener("submit", async e => {
-  e.preventDefault();
+document.getElementById("searchInventory").addEventListener("input",e=>renderInventory(e.target.value));
 
-  const user = auth.currentUser;
-  if (!user) {
-    showToast("Please sign in first.", "error");
-    return;
-  }
+function toggleCustomDateInputs() {
+  document.getElementById("customDateRangeContainer").classList.toggle("hidden",document.getElementById("reportRangeSelect").value!=="custom");
+}
 
-  const code = document.getElementById("itemCode").value.trim();
-  const name = document.getElementById("itemName").value.trim();
-  const type = document.querySelector('input[name="txnType"]:checked').value;
-  const party = document.getElementById("itemParty").value.trim();
-  const floor = document.getElementById("itemFloor").value;
-  const rack = document.getElementById("itemRack").value.trim();
-  const box = document.getElementById("itemBox").value.trim();
-  const dateVal = document.getElementById("itemDate").value;
-  const qty = Number(document.getElementById("itemQty").value);
-  const unitPrice = Number(document.getElementById("itemUnitPrice").value);
-  const notes = document.getElementById("itemNotes").value.trim();
+/* ========================= OWNER / EDITOR MANAGEMENT ========================= */
+async function openEditorsManager() {
+  if (!isOwner()) return showToast("Only the owner can manage authorized editors.","error");
 
-  if (!code || !name) return showToast("Item code and name are required.", "error");
-  if (!Number.isInteger(qty) || qty <= 0) return showToast("Quantity must be a whole number greater than 0.", "error");
-  if (!dateVal) return showToast("Please select a date.", "error");
-  if (!Number.isFinite(unitPrice) || unitPrice < 0) return showToast("Invalid unit price.", "error");
+  const snap=await membersRef.orderBy("email").get();
+  const rows=snap.docs.map(d=>{
+    const x=d.data();
+    return `<div class="flex items-center justify-between gap-3 p-3 border rounded-xl">
+      <div><div class="font-bold text-sm">${escapeHtml(x.email||d.id)}</div><div class="text-[10px] text-slate-500">${escapeHtml(d.id)}</div></div>
+      <button onclick="removeEditor('${escapeHtml(d.id)}')" class="text-rose-600 text-xs font-bold">Remove</button>
+    </div>`;
+  }).join("");
 
-  if (!(await verifyPin(type === "IN" ? "add stock" : "remove stock"))) return;
+  showModal("Authorized Editors",`
+    <p class="text-xs text-slate-500 mb-4">Any Google account may sign in, but only accounts listed here can edit the shared inventory.</p>
+    <div class="flex gap-2 mb-5">
+      <input id="editorEmailInput" class="flex-1 border rounded-xl px-3 py-2.5 text-sm" placeholder="employee@gmail.com">
+      <button onclick="addEditor()" class="bg-slate-900 text-white rounded-xl px-4 text-xs font-bold">Add</button>
+    </div>
+    <div class="space-y-2">${rows||'<div class="text-xs text-slate-400">No editors added yet.</div>'}</div>
+  `);
+}
 
-  const button = document.getElementById("commitButton");
-  button.disabled = true;
-  button.textContent = "☁️ Saving...";
+async function addEditor() {
+  const email=document.getElementById("editorEmailInput").value.trim().toLowerCase();
+  if(!email || !email.includes("@")) return showToast("Enter a valid Google email.","error");
+  if(email===OWNER_EMAIL.toLowerCase()) return showToast("Owner is already authorized.","info");
 
+  /* Store by a stable email key first. The signed-in user's UID is filled
+     automatically the first time that editor signs in. */
+  const key="email_"+btoa(email).replace(/[^a-zA-Z0-9]/g,"").slice(0,80);
   try {
-    const normalizedCode = code.toLowerCase();
-    const querySnapshot = await INVENTORY_REF
-      .where("codeLower", "==", normalizedCode)
-      .limit(1)
-      .get();
-
-    const existingDoc = querySnapshot.empty ? null : querySnapshot.docs[0];
-    const existingData = existingDoc ? existingDoc.data() : null;
-    const nowIso = new Date().toISOString();
-    let newQty;
-    let inventoryId;
-
-    if (type === "OUT") {
-      if (!existingDoc) throw new Error("ITEM_NOT_FOUND");
-
-      const currentQty = Number(existingData.qty) || 0;
-      if (currentQty < qty) throw new Error(`INSUFFICIENT:${currentQty}`);
-
-      newQty = currentQty - qty;
-      inventoryId = existingDoc.id;
-
-      await existingDoc.ref.update({
-        qty: newQty,
-        updatedAt: nowIso,
-        updatedBy: user.uid
-      });
-    } else if (existingDoc) {
-      const currentQty = Number(existingData.qty) || 0;
-      newQty = currentQty + qty;
-      inventoryId = existingDoc.id;
-
-      await existingDoc.ref.update({
-        code,
-        codeLower: normalizedCode,
-        name,
-        qty: newQty,
-        floor,
-        rack,
-        box,
-        unitPrice,
-        updatedAt: nowIso,
-        updatedBy: user.uid
-      });
-    } else {
-      const safeId = encodeURIComponent(normalizedCode);
-      const ref = INVENTORY_REF.doc(safeId);
-      inventoryId = ref.id;
-      newQty = qty;
-
-      await ref.set({
-        code,
-        codeLower: normalizedCode,
-        name,
-        qty,
-        floor,
-        rack,
-        box,
-        unitPrice,
-        createdAt: nowIso,
-        updatedAt: nowIso,
-        createdBy: user.uid,
-        updatedBy: user.uid
-      });
-    }
-
-    // Store dates/timestamps as plain ISO strings. This avoids the Compat SDK
-    // custom Timestamp/FieldValue type error seen in the deployed page.
-    await TRANSACTIONS_REF.doc().set({
-      date: new Date(`${dateVal}T12:00:00`).toISOString(),
-      code,
-      codeLower: normalizedCode,
-      name,
-      type,
-      party,
-      floor,
-      rack,
-      box,
-      qty,
-      unitPrice,
-      notes,
-      inventoryId,
-      createdAt: nowIso,
-      createdBy: user.uid,
-      createdByEmail: user.email || ""
-    });
-
-    showToast(
-      type === "IN" ? `Stocked IN ${qty} × ${name}` : `Stocked OUT ${qty} × ${name}`,
-      "success"
-    );
-
-    if (newQty <= LOW_STOCK_THRESHOLD && typeof emailjs !== "undefined") {
-      try { sendLowStockEmail(name, code, newQty); }
-      catch (emailError) { console.error("EmailJS error:", emailError); }
-    }
-
-    document.getElementById("stockForm").reset();
-    document.getElementById("itemQty").value = "1";
-    document.getElementById("itemUnitPrice").value = "0.00";
-    calculateTotal();
-    setTodayDate();
-    document.querySelector('input[name="txnType"][value="IN"]').checked = true;
-    updatePartyLabel();
-    document.getElementById("itemCode").focus();
-
-  } catch (error) {
-    console.error("Cloud save failed:", error);
-
-    if (error && error.message === "ITEM_NOT_FOUND") {
-      showToast("This item does not exist in inventory. Use Stock IN first.", "error");
-    } else if (error && String(error.message).startsWith("INSUFFICIENT:")) {
-      const available = String(error.message).split(":")[1];
-      showToast(`Insufficient stock! Available: ${available}, Requested: ${qty}`, "error");
-    } else {
-      showToast("Cloud save failed: " + getFirebaseError(error), "error");
-    }
-  } finally {
-    button.disabled = false;
-    button.textContent = "☁️ Commit to Cloud";
-  }
-});
-
-/* ================= AUTOCOMPLETE ================= */
-const codeInput = document.getElementById("itemCode");
-const nameInput = document.getElementById("itemName");
-const suggestionsBox = document.getElementById("codeSuggestions");
-
-codeInput.addEventListener("input", () => {
-  const val = codeInput.value.trim().toLowerCase();
-  suggestionsBox.innerHTML = "";
-
-  if (!val) {
-    suggestionsBox.classList.add("hidden");
-    return;
-  }
-
-  const matches = inventory.filter(i =>
-    String(i.code || "").toLowerCase().includes(val) ||
-    String(i.name || "").toLowerCase().includes(val)
-  ).slice(0, 8);
-
-  if (!matches.length) {
-    suggestionsBox.classList.add("hidden");
-    return;
-  }
-
-  matches.forEach(m => {
-    const div = document.createElement("div");
-    div.className = "px-3.5 py-2 hover:bg-slate-50 cursor-pointer text-xs flex justify-between gap-3 border-b";
-
-    const left = document.createElement("span");
-    left.className = "font-mono text-slate-400 font-bold";
-    left.textContent = m.code || "";
-
-    const right = document.createElement("span");
-    right.className = "font-semibold text-slate-800";
-    right.textContent = m.name || "";
-
-    div.append(left,right);
-
-    div.onclick = () => {
-      codeInput.value = m.code || "";
-      nameInput.value = m.name || "";
-      document.getElementById("itemFloor").value = m.floor || "Ground Floor";
-      document.getElementById("itemRack").value = m.rack || "";
-      document.getElementById("itemBox").value = m.box || "";
-      document.getElementById("itemUnitPrice").value = getDerivedAvgUnitPrice(m.code).toFixed(2);
-      calculateTotal();
-      suggestionsBox.classList.add("hidden");
-    };
-
-    suggestionsBox.appendChild(div);
-  });
-
-  suggestionsBox.classList.remove("hidden");
-});
-
-codeInput.addEventListener("blur", () => {
-  setTimeout(() => suggestionsBox.classList.add("hidden"), 150);
-
-  const exact = inventory.find(i =>
-    i.code && i.code.toLowerCase() === codeInput.value.trim().toLowerCase()
-  );
-
-  if (exact) {
-    nameInput.value = exact.name || "";
-    document.getElementById("itemFloor").value = exact.floor || "Ground Floor";
-    document.getElementById("itemRack").value = exact.rack || "";
-    document.getElementById("itemBox").value = exact.box || "";
-    document.getElementById("itemUnitPrice").value = getDerivedAvgUnitPrice(exact.code).toFixed(2);
-    calculateTotal();
-  }
-});
-
-document.getElementById("searchInventory").addEventListener("input", e => {
-  renderInventory(e.target.value);
-});
-
-/* ================= DELETE ================= */
-async function deleteItem(docId) {
-  if (!auth.currentUser) return;
-  if (!(await verifyPin("delete this item"))) return;
-  if (!confirm("Delete this item from the shared cloud inventory?")) return;
-
-  try {
-    await INVENTORY_REF.doc(docId).delete();
-    showToast("Item deleted from cloud.", "info");
-  } catch (error) {
-    console.error(error);
-    showToast("Delete failed: " + getFirebaseError(error), "error");
+    await membersRef.doc(key).set({email,role:"editor",active:true,createdAt:firebase.firestore.FieldValue.serverTimestamp()},{merge:true});
+    showToast("Editor email authorized. They must sign in once to link their Google UID.","success");
+    closeModal();
+    openEditorsManager();
+  } catch(e) {
+    console.error(e);
+    showToast(friendlyFirestoreError(e),"error");
   }
 }
 
-/* ================= CSV / BACKUP ================= */
-function downloadCSV(filename, rows) {
-  const csv = rows.map(row =>
-    row.map(cell => `"${String(cell ?? "").replace(/"/g,'""')}"`).join(",")
-  ).join("\n");
+async function removeEditor(id) {
+  if(!isOwner()) return;
+  if(!confirm("Remove this editor's access?")) return;
+  try {
+    await membersRef.doc(id).delete();
+    showToast("Editor access removed.","info");
+    closeModal();
+    openEditorsManager();
+  } catch(e) { showToast(friendlyFirestoreError(e),"error"); }
+}
 
-  const blob = new Blob(["\uFEFF" + csv], {type:"text/csv;charset=utf-8;"});
-  const url = URL.createObjectURL(blob);
-  const a = document.createElement("a");
-  a.href = url;
-  a.download = filename;
-  document.body.appendChild(a);
-  a.click();
-  a.remove();
-  URL.revokeObjectURL(url);
+/* When a non-owner signs in, allow an email-authorized member document to be
+   upgraded to a UID-specific document. This requires a matching email entry. */
+async function linkEditorUid(user) {
+  if(isOwner()) return;
+  const key="email_"+btoa(String(user.email||"").toLowerCase()).replace(/[^a-zA-Z0-9]/g,"").slice(0,80);
+  const emailDoc=membersRef.doc(key);
+  const snap=await emailDoc.get();
+  if(snap.exists && snap.data().role==="editor" && snap.data().active!==false) {
+    await membersRef.doc(user.uid).set({
+      email:user.email,role:"editor",active:true,linkedFrom:key,linkedAt:firebase.firestore.FieldValue.serverTimestamp()
+    });
+    return true;
+  }
+  return false;
+}
+
+/* Replace resolveRole with email-link aware version. */
+const _oldResolveRole = resolveRole;
+resolveRole = async function(user) {
+  if(isOwner(user)) {
+    currentRole="owner"; showManagement(); subscribeData(); return;
+  }
+  try {
+    let snap=await membersRef.doc(user.uid).get();
+    if(!snap.exists) {
+      await linkEditorUid(user);
+      snap=await membersRef.doc(user.uid).get();
+    }
+    if(snap.exists && snap.data().active!==false && snap.data().role==="editor") {
+      currentRole="editor"; showManagement(); subscribeData();
+    } else {
+      currentRole="viewerDenied";
+      showManagement();
+      inventory=[];transactions=[];renderAll();
+      const b=document.getElementById("accessBanner");
+      b.className="rounded-xl p-4 text-sm font-semibold bg-amber-50 border border-amber-200 text-amber-800";
+      b.innerHTML=`Signed in as <b>${escapeHtml(user.email||"")}</b>. This account is not an authorized editor.`;
+      b.classList.remove("hidden");
+      setSync("Signed in — no edit access",false);
+    }
+  } catch(e) {
+    console.error(e);
+    showToast(friendlyFirestoreError(e),"error");
+  }
+};
+
+/* ========================= VIEWER LINKS ========================= */
+function randomToken(length=32) {
+  const chars="ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz23456789";
+  let out="";
+  const arr=new Uint32Array(length);
+  crypto.getRandomValues(arr);
+  for(let i=0;i<length;i++) out+=chars[arr[i]%chars.length];
+  return out;
+}
+
+async function openViewerManager() {
+  if(!isOwner()) return showToast("Only the owner can create or revoke viewer links.","error");
+
+  const snap=await viewerLinksRef.orderBy("createdAt","desc").get();
+  const links=snap.docs.map(d=>({id:d.id,...d.data()}));
+
+  const rows=links.map(x=>{
+    const url=location.origin+location.pathname+"?view="+encodeURIComponent(x.token);
+    return `<div class="border rounded-xl p-3">
+      <div class="flex justify-between gap-3">
+        <div class="min-w-0"><div class="font-bold text-sm">${x.active!==false?"Active":"Revoked"}</div><div class="text-[10px] text-slate-500 break-all">${escapeHtml(url)}</div></div>
+        <div class="flex gap-2">
+          <button onclick="copyText('${escapeHtml(url)}')" class="text-indigo-600 text-xs font-bold">Copy</button>
+          ${x.active!==false?`<button onclick="revokeViewerLink('${escapeHtml(x.id)}')" class="text-rose-600 text-xs font-bold">Revoke</button>`:""}
+        </div>
+      </div>
+    </div>`;
+  }).join("");
+
+  showModal("Inventory Viewer Link",`
+    <p class="text-xs text-slate-500 mb-4">Anyone who has this secret link can view the inventory. They cannot edit it. Revoking the link immediately stops access.</p>
+    <button onclick="createViewerLink()" class="w-full bg-indigo-600 hover:bg-indigo-700 text-white py-3 rounded-xl text-xs font-bold mb-4">+ Generate New Viewer Link</button>
+    <div class="space-y-2 max-h-80 overflow-y-auto">${rows||'<div class="text-xs text-slate-400">No viewer links yet.</div>'}</div>
+  `);
+}
+
+async function createViewerLink() {
+  if(!isOwner()) return;
+  const token=randomToken(40);
+  try {
+    await viewerLinksRef.doc(token).set({
+      token,active:true,createdAt:firebase.firestore.FieldValue.serverTimestamp(),createdBy:currentUser.uid
+    });
+    await syncViewerLink(token);
+    const url=location.origin+location.pathname+"?view="+encodeURIComponent(token);
+    await copyText(url);
+    showToast("Viewer link generated and copied.","success");
+    closeModal();
+    openViewerManager();
+  } catch(e) {
+    console.error(e);
+    showToast(friendlyFirestoreError(e),"error");
+  }
+}
+
+async function revokeViewerLink(id) {
+  if(!isOwner()) return;
+  if(!confirm("Revoke this viewer link?")) return;
+  try {
+    await viewerLinksRef.doc(id).set({active:false},{merge:true});
+    showToast("Viewer link revoked.","info");
+    closeModal();
+    openViewerManager();
+  } catch(e) { showToast(friendlyFirestoreError(e),"error"); }
+}
+
+async function syncViewerLink(token) {
+  const linkRef=viewerLinksRef.doc(token);
+  const snap=await linkRef.get();
+  if(!snap.exists || snap.data().active===false) return;
+
+  const oldSnap=await linkRef.collection("inventory").get();
+  const batch=db.batch();
+  oldSnap.forEach(d=>batch.delete(d.ref));
+
+  inventory.forEach(item=>{
+    const publicData={
+      code:item.code||"",
+      name:item.name||"",
+      model:item.model||"",
+      partNumber:item.partNumber||"",
+      qty:Number(item.qty)||0,
+      floor:item.floor||"",
+      rack:item.rack||"",
+      box:item.box||"",
+      minStock:Number(item.minStock)||LOW_STOCK_DEFAULT,
+      updatedAt:firebase.firestore.FieldValue.serverTimestamp()
+    };
+    batch.set(linkRef.collection("inventory").doc(item.id),publicData);
+  });
+
+  await batch.commit();
+}
+
+async function syncAllViewerLinks() {
+  if(!isOwner()) return;
+  const snap=await viewerLinksRef.where("active","==",true).get();
+  for(const d of snap.docs) {
+    try { await syncViewerLink(d.id); } catch(e) { console.error("Viewer sync failed",d.id,e); }
+  }
+}
+
+async function loadViewer(token) {
+  viewerToken=token;
+  document.getElementById("managementPage").classList.add("hidden");
+  document.getElementById("viewerPage").classList.remove("hidden");
+
+  const errorBox=document.getElementById("viewerError");
+  errorBox.classList.add("hidden");
+
+  try {
+    const linkSnap=await viewerLinksRef.doc(token).get();
+    if(!linkSnap.exists || linkSnap.data().active===false) {
+      throw new Error("This inventory link is invalid or has been revoked.");
+    }
+
+    if(unsubscribeViewerInventory) unsubscribeViewerInventory();
+
+    unsubscribeViewerInventory=viewerLinksRef.doc(token).collection("inventory")
+      .onSnapshot(snap=>{
+        viewerInventory=snap.docs.map(d=>({id:d.id,...d.data()}));
+        renderViewer();
+      },err=>{
+        console.error(err);
+        errorBox.textContent="Unable to load inventory. The link may have been revoked.";
+        errorBox.classList.remove("hidden");
+      });
+
+    /* Viewer access notification. Configure the EmailJS template ID below. */
+    sendViewerAccessEmail(token);
+  } catch(e) {
+    errorBox.textContent=e.message||"Invalid viewer link.";
+    errorBox.classList.remove("hidden");
+  }
+}
+
+function renderViewer() {
+  const term=document.getElementById("viewerSearch").value.trim().toLowerCase();
+  const list=viewerInventory.filter(i=>[
+    i.name,i.model,i.partNumber,i.code,i.floor,i.rack,i.box
+  ].some(v=>String(v||"").toLowerCase().includes(term)));
+
+  document.getElementById("viewerCount").textContent=`${list.length} matching item${list.length===1?"":"s"}`;
+  const body=document.getElementById("viewerTableBody");
+  body.innerHTML="";
+
+  list.sort((a,b)=>String(a.name||"").localeCompare(String(b.name||""))).forEach(i=>{
+    const qty=Number(i.qty)||0;
+    const min=Number(i.minStock)||LOW_STOCK_DEFAULT;
+    const tr=document.createElement("tr");
+    tr.innerHTML=`
+      <td class="p-3 font-mono font-bold">${escapeHtml(i.code)}</td>
+      <td class="p-3 font-bold">${escapeHtml(i.name)}</td>
+      <td class="p-3">${escapeHtml(i.model||"-")}</td>
+      <td class="p-3">${escapeHtml(i.partNumber||"-")}</td>
+      <td class="p-3">${escapeHtml(locationText(i))}</td>
+      <td class="p-3 font-bold">${qty}</td>
+      <td class="p-3">${qty<=min?'<span class="px-2 py-1 rounded bg-rose-50 text-rose-700 font-bold">Low</span>':'<span class="px-2 py-1 rounded bg-emerald-50 text-emerald-700 font-bold">In stock</span>'}</td>`;
+    body.appendChild(tr);
+  });
+}
+
+document.getElementById("viewerSearch").addEventListener("input",renderViewer);
+
+/* EmailJS viewer access alert. The recipient is configured in the EmailJS template. */
+function sendViewerAccessEmail(token) {
+  if(typeof emailjs==="undefined") return;
+  const url=location.href;
+  emailjs.send(EMAILJS_SERVICE_ID,VIEWER_ACCESS_TEMPLATE_ID,{
+    viewer_url:url,
+    access_time:new Date().toLocaleString(),
+    viewer_token:token
+  }).then(()=>console.log("Viewer access email sent"))
+    .catch(err=>console.warn("Viewer access email failed. Configure VIEWER_ACCESS_TEMPLATE_ID.",err));
+}
+
+function sendLowStockEmail(itemName,itemCode,currentQty) {
+  emailjs.send(EMAILJS_SERVICE_ID,LOW_STOCK_TEMPLATE_ID,{
+    item_name:itemName,item_code:itemCode,current_qty:currentQty
+  }).catch(err=>console.warn("Low stock email failed",err));
+}
+
+/* ========================= MODAL ========================= */
+function showModal(title,html) {
+  closeModal();
+  const wrap=document.createElement("div");
+  wrap.id="activeModal";
+  wrap.className="fixed inset-0 z-[90] bg-slate-950/50 flex items-center justify-center p-4";
+  wrap.innerHTML=`<div class="bg-white rounded-2xl shadow-2xl w-full max-w-xl max-h-[85vh] overflow-y-auto p-6">
+    <div class="flex justify-between items-center mb-5"><h3 class="text-lg font-extrabold">${escapeHtml(title)}</h3><button onclick="closeModal()" class="text-slate-400 text-xl">×</button></div>
+    ${html}
+  </div>`;
+  document.body.appendChild(wrap);
+}
+function closeModal(){document.getElementById("activeModal")?.remove()}
+function copyText(text){
+  return navigator.clipboard.writeText(text).then(()=>showToast("Copied.","success")).catch(()=>showToast("Copy failed. Copy the link manually.","error"));
+}
+
+/* ========================= DELETE / EXPORT / BACKUP ========================= */
+async function deleteItem(id) {
+  if(!canEdit()) return;
+  if(!confirm("Remove this product from the shared inventory? Transactions are kept.")) return;
+  try {
+    await inventoryRef.doc(id).delete();
+    await syncAllViewerLinks();
+    showToast("Product removed.","info");
+  } catch(e) {
+    console.error(e);showToast(friendlyFirestoreError(e),"error");
+  }
+}
+
+function downloadCSV(filename,rows) {
+  const content=rows.map(r=>r.map(v=>`"${String(v??"").replace(/"/g,'""')}"`).join(",")).join("\n");
+  const blob=new Blob(["\ufeff"+content],{type:"text/csv;charset=utf-8"});
+  const url=URL.createObjectURL(blob),a=document.createElement("a");
+  a.href=url;a.download=filename;document.body.appendChild(a);a.click();a.remove();URL.revokeObjectURL(url);
 }
 
 function exportInventoryCSV() {
-  const rows = [["Item Code","Item Name","Floor","Rack","Box","Quantity","Avg Price","Total Value","Status"]];
-
-  inventory.forEach(i => {
-    const q = Number(i.qty) || 0;
-    const p = getDerivedAvgUnitPrice(i.code);
-    rows.push([i.code,i.name,i.floor||"-",i.rack||"-",i.box||"-",q,p.toFixed(2),(q*p).toFixed(2),q<LOW_STOCK_THRESHOLD?"Low Stock":"In Stock"]);
+  const rows=[["SKU","Product","Model","Part Number","Floor","Rack","Box","Quantity","Avg Price","Total Value","Status"]];
+  inventory.forEach(i=>{
+    const q=Number(i.qty)||0,p=averagePrice(i.code),m=Number(i.minStock)||LOW_STOCK_DEFAULT;
+    rows.push([i.code,i.name,i.model||"",i.partNumber||"",i.floor||"",i.rack||"",i.box||"",q,p.toFixed(2),(q*p).toFixed(2),q<=m?"Low":"In Stock"]);
   });
-
-  downloadCSV(`inventory_export_${dateStamp()}.csv`, rows);
-  showToast("Inventory exported.", "success");
+  downloadCSV("inventory_"+dateStamp()+".csv",rows);showToast("Inventory CSV downloaded.","success");
 }
 
 function exportTransactionsCSV() {
-  const rows = [["Date","Item Code","Item Name","Type","Supplier / Customer","Floor","Rack","Box","Quantity","Unit Price","Total","Notes"]];
-
-  transactions.forEach(t => {
-    const q = Number(t.qty)||0;
-    const p = Number(t.unitPrice)||0;
-    rows.push([formatDate(t.date),t.code,t.name,t.type,t.party||"-",t.floor||"-",t.rack||"-",t.box||"-",q,p.toFixed(2),(q*p).toFixed(2),t.notes||""]);
+  const rows=[["Date","SKU","Product","Model","Part Number","Type","Party","Floor","Rack","Box","Qty","Unit Price","Total","Notes"]];
+  [...transactions].sort((a,b)=>new Date(b.date)-new Date(a.date)).forEach(t=>{
+    const q=Number(t.qty)||0,p=Number(t.unitPrice)||0;
+    rows.push([t.date,t.code,t.name,t.model||"",t.partNumber||"",t.type,t.party||"",t.floor||"",t.rack||"",t.box||"",q,p.toFixed(2),(q*p).toFixed(2),t.notes||""]);
   });
-
-  downloadCSV(`transactions_export_${dateStamp()}.csv`, rows);
-  showToast("Transaction logs exported.", "success");
-}
-
-function downloadPeriodReportCSV() {
-  const txns = getFilteredReportTransactions();
-
-  if (!txns.length) {
-    showToast("No transactions in selected period.", "info");
-    return;
-  }
-
-  const rows = [["Date","Item Code","Item Name","Type","Supplier / Customer","Floor","Rack","Box","Quantity","Unit Price","Total","Notes"]];
-
-  txns.forEach(t => {
-    const q=Number(t.qty)||0, p=Number(t.unitPrice)||0;
-    rows.push([formatDate(t.date),t.code,t.name,t.type,t.party||"-",t.floor||"-",t.rack||"-",t.box||"-",q,p.toFixed(2),(q*p).toFixed(2),t.notes||""]);
-  });
-
-  downloadCSV(`period_report_${dateStamp()}.csv`, rows);
-  showToast("Period report exported.", "success");
+  downloadCSV("transactions_"+dateStamp()+".csv",rows);showToast("Transaction CSV downloaded.","success");
 }
 
 function backupJSON() {
-  const data = {
-    storeId: STORE_ID,
-    inventory,
-    transactions,
-    exportedAt: new Date().toISOString()
-  };
-
-  const blob = new Blob([JSON.stringify(data,null,2)], {type:"application/json"});
-  const url = URL.createObjectURL(blob);
-  const a = document.createElement("a");
-  a.href=url;
-  a.download=`stockkeeper_backup_${dateStamp()}.json`;
-  document.body.appendChild(a);
-  a.click();
-  a.remove();
-  URL.revokeObjectURL(url);
-  showToast("Backup downloaded.", "success");
+  const blob=new Blob([JSON.stringify({inventory,transactions,exportedAt:new Date().toISOString()},null,2)],{type:"application/json"});
+  const url=URL.createObjectURL(blob),a=document.createElement("a");
+  a.href=url;a.download="stockkeeper_backup_"+dateStamp()+".json";document.body.appendChild(a);a.click();a.remove();URL.revokeObjectURL(url);
+  showToast("Backup downloaded.","success");
 }
 
 async function resetAppData() {
-  if (!auth.currentUser) return;
-  if (!(await verifyPin("reset ALL application data"))) return;
-
-  if (!confirm("PERMANENTLY DELETE ALL INVENTORY AND TRANSACTION DATA?")) return;
-
+  if(!isOwner()) return showToast("Only the owner can purge data.","error");
+  if(!confirm("PERMANENTLY delete all inventory and transaction records?")) return;
   try {
-    const [invSnap, txnSnap] = await Promise.all([
-      INVENTORY_REF.get(),
-      TRANSACTIONS_REF.get()
-    ]);
-
-    const refs = [];
-    invSnap.forEach(doc => refs.push(doc.ref));
-    txnSnap.forEach(doc => refs.push(doc.ref));
-
-    while (refs.length) {
-      const batch = db.batch();
-      refs.splice(0, 450).forEach(ref => batch.delete(ref));
-      await batch.commit();
-    }
-
-    showToast("Cloud database reset.", "info");
-  } catch (error) {
-    console.error(error);
-    showToast("Reset failed: " + getFirebaseError(error), "error");
-  }
+    let batch=db.batch(),count=0;
+    const invSnap=await inventoryRef.get(),txnSnap=await transactionsRef.get();
+    invSnap.forEach(d=>{batch.delete(d.ref);if(++count===400){batch=db.batch();count=0}});
+    /* Use individual deletes to avoid exceeding batch limits. */
+    for(const d of invSnap.docs) await d.ref.delete();
+    for(const d of txnSnap.docs) await d.ref.delete();
+    await syncAllViewerLinks();
+    showToast("Cloud inventory and transactions cleared.","info");
+  } catch(e){console.error(e);showToast(friendlyFirestoreError(e),"error")}
 }
 
-/* ================= BOOT ================= */
-setTodayDate();
+/* ========================= INIT ========================= */
+document.getElementById("itemDate").value=todayISO();
+document.getElementById("reportStartDate").value=todayISO().slice(0,7)+"-01";
+document.getElementById("reportEndDate").value=todayISO();
 calculateTotal();
 updatePartyLabel();
+
+const params=new URLSearchParams(location.search);
+const viewToken=params.get("view");
+if(viewToken) loadViewer(viewToken);
+else document.getElementById("managementPage").classList.remove("hidden");
 </script>
 </body>
 </html>
